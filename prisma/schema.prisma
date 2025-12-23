@@ -1,0 +1,237 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  email       String?
+  phone       String?
+  address     String?
+  website     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  users       User[]
+  farms       Farm[]
+  auditLogs   AuditLog[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  emailVerified  DateTime?
+  name           String?
+  image          String?
+  hashedPassword String?
+  role           String    @default("WORKER") // OWNER, MANAGER, WORKER
+  isActive       Boolean   @default(true)
+  phone          String?
+  avatar         String?
+  organizationId String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accounts     Account[]
+  sessions     Session[]
+  
+  // Farm management relations
+  managedFarms Farm[] @relation("FarmManager")
+  
+  // Attendance relations
+  attendanceRecords Attendance[]
+  
+  // Settings relation
+  settings UserSettings?
+  
+  // Audit log relations
+  auditLogs AuditLog[]
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("users")
+}
+
+model Farm {
+  id             String   @id @default(cuid())
+  name           String
+  location       String?
+  description    String?
+  isActive       Boolean  @default(true)
+  organizationId String
+  managerId      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  manager      User?        @relation("FarmManager", fields: [managerId], references: [id])
+  sheds        Shed[]
+
+  @@index([organizationId])
+  @@index([managerId])
+  @@map("farms")
+}
+
+model Shed {
+  id          String   @id @default(cuid())
+  name        String
+  capacity    Int
+  description String?
+  isActive    Boolean  @default(true)
+  farmId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  farm        Farm         @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  productions Production[]
+
+  @@index([farmId])
+  @@map("sheds")
+}
+
+model Production {
+  id           String   @id @default(cuid())
+  date         DateTime
+  totalEggs    Int
+  brokenEggs   Int      @default(0)
+  damagedEggs  Int      @default(0)
+  sellableEggs Int // Calculated: totalEggs - brokenEggs - damagedEggs
+  notes        String?
+  shedId       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  shed Shed @relation(fields: [shedId], references: [id], onDelete: Cascade)
+
+  @@unique([shedId, date])
+  @@index([shedId])
+  @@index([date])
+  @@map("productions")
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  date      DateTime
+  status    String   @default("PRESENT") // PRESENT, ABSENT, LATE, HALF_DAY
+  notes     String?
+  userId    String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@map("attendance")
+}
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  action         String      @default("CREATE") // CREATE, UPDATE, DELETE, LOGIN, LOGOUT
+  entityType     String // e.g., "User", "Farm", "Production"
+  entityId       String?
+  oldValues      String? // JSON string
+  newValues      String? // JSON string
+  userId         String?
+  organizationId String
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime    @default(now())
+
+  // Relations
+  user         User?        @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model UserSettings {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  
+  // Notification settings
+  emailNotifications      Boolean  @default(true)
+  smsNotifications        Boolean  @default(false)
+  productionAlerts        Boolean  @default(true)
+  attendanceAlerts        Boolean  @default(true)
+  lowProductionThreshold  Int      @default(80)
+  attendanceThreshold     Int      @default(85)
+  
+  // System settings
+  timezone                String   @default("UTC")
+  dateFormat              String   @default("MM/DD/YYYY")
+  currency                String   @default("USD")
+  language                String   @default("en")
+  theme                   String   @default("light")
+  
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_settings")
+}
