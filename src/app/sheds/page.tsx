@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, Warehouse, Building2 } from "lucide-react"
 import { toast } from "sonner"
+import DashboardLayout from "@/components/layout/dashboard-layout"
 
 interface Shed {
   id: string
@@ -104,81 +105,82 @@ export default function ShedsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Shed Management</h1>
-          <p className="text-gray-600">Manage poultry sheds and their capacity</p>
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Shed Management</h1>
+            <p className="text-gray-600">Manage poultry sheds and their capacity</p>
+          </div>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Shed
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create New Shed</DialogTitle>
+                <DialogDescription>
+                  Add a new shed to your farm
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreateShed}>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="name">Shed Name</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="farmId">Farm</Label>
+                    <Select value={formData.farmId} onValueChange={(value) => setFormData({ ...formData, farmId: value })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a farm" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {farms.map((farm) => (
+                          <SelectItem key={farm.id} value={farm.id}>
+                            {farm.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="capacity">Capacity (birds)</Label>
+                    <Input
+                      id="capacity"
+                      type="number"
+                      value={formData.capacity}
+                      onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="description">Description</Label>
+                    <Input
+                      id="description"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <DialogFooter className="mt-6">
+                  <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">Create Shed</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Shed
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create New Shed</DialogTitle>
-              <DialogDescription>
-                Add a new shed to your farm
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreateShed}>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Shed Name</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="farmId">Farm</Label>
-                  <Select value={formData.farmId} onValueChange={(value) => setFormData({ ...formData, farmId: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a farm" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {farms.map((farm) => (
-                        <SelectItem key={farm.id} value={farm.id}>
-                          {farm.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="capacity">Capacity (birds)</Label>
-                  <Input
-                    id="capacity"
-                    type="number"
-                    value={formData.capacity}
-                    onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Input
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  />
-                </div>
-              </div>
-              <DialogFooter className="mt-6">
-                <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">Create Shed</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {loading ? (
@@ -234,6 +236,7 @@ export default function ShedsPage() {
           ))
         )}
       </div>
-    </div>
+      </div>
+    </DashboardLayout>
   )
 }

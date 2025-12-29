@@ -4,7 +4,7 @@ import { createSuccessResponse, handleApiError, getOrganizationId } from "@/lib/
 
 export async function GET(request: NextRequest) {
   try {
-    const organizationId = getOrganizationId(request)
+    const organizationId = await getOrganizationId(request)
     const { searchParams } = new URL(request.url)
     const days = parseInt(searchParams.get("days") || "30")
 

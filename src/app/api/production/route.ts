@@ -115,14 +115,39 @@ export async function POST(request: NextRequest) {
       return createErrorResponse("Production record already exists for this shed and date", 400)
     }
 
-    // Calculate sellable eggs
-    const sellableEggs = validatedData.totalEggs - validatedData.brokenEggs - validatedData.damagedEggs
+    // Calculate sellable eggs (normal + commercial eggs)
+    const normalEggs = validatedData.normalEggs || 0
+    const commEggs = validatedData.commEggs || 0
+    const waterEggs = validatedData.waterEggs || 0
+    const jellyEggs = validatedData.jellyEggs || 0
+    const creakEggs = validatedData.creakEggs || 0
+    const leakerEggs = validatedData.leakerEggs || 0
+    const sellableEggs = normalEggs + commEggs
+
+    // Handle backward compatibility
+    const jumboEggs = validatedData.jumboEggs || 0
+    const crackedEggs = validatedData.crackedEggs || creakEggs
+    const brokenEggs = validatedData.brokenEggs || creakEggs
+    const damagedEggs = validatedData.damagedEggs || jellyEggs
 
     const production = await prisma.production.create({
       data: {
-        ...validatedData,
         date: new Date(validatedData.date),
+        totalEggs: validatedData.totalEggs,
+        normalEggs,
+        commEggs,
+        waterEggs,
+        jellyEggs,
+        creakEggs,
+        leakerEggs,
         sellableEggs,
+        // Keep old fields for backward compatibility
+        jumboEggs,
+        crackedEggs,
+        brokenEggs,
+        damagedEggs,
+        notes: validatedData.notes,
+        shedId: validatedData.shedId,
       },
       include: {
         shed: {

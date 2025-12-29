@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Calendar, Users, CheckCircle, XCircle, Clock, Heart, Plane } from "lucide-react"
+import { Plus, Calendar, Users, CheckCircle, XCircle, Clock, Heart, Plane, Edit, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 import DashboardLayout from "@/components/layout/dashboard-layout"
 
@@ -47,11 +47,18 @@ export default function AttendancePage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editingAttendance, setEditingAttendance] = useState<Attendance | null>(null)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     userId: "",
+    status: "PRESENT",
+    notes: "",
+  })
+
+  const [editFormData, setEditFormData] = useState({
     status: "PRESENT",
     notes: "",
   })
@@ -165,6 +172,91 @@ export default function AttendancePage() {
       }
     } catch (error) {
       toast.error("Error recording bulk attendance")
+    }
+  }
+
+  const markQuickAttendance = async (userId: string, status: string) => {
+    try {
+      const response = await fetch("/api/attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: selectedDate,
+          userId,
+          status,
+          notes: `Quick ${status.toLowerCase()} entry`,
+        }),
+      })
+
+      if (response.ok) {
+        const user = users.find(u => u.id === userId)
+        toast.success(`${user?.name} marked as ${status.toLowerCase()}`)
+        fetchAttendances()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Failed to record attendance")
+      }
+    } catch (error) {
+      toast.error("Error recording attendance")
+    }
+  }
+
+  const handleEditAttendance = (attendance: Attendance) => {
+    setEditingAttendance(attendance)
+    setEditFormData({
+      status: attendance.status,
+      notes: attendance.notes || "",
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const handleUpdateAttendance = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!editingAttendance) return
+
+    try {
+      const response = await fetch(`/api/attendance/${editingAttendance.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editFormData),
+      })
+
+      if (response.ok) {
+        toast.success("Attendance updated successfully")
+        setIsEditDialogOpen(false)
+        setEditingAttendance(null)
+        fetchAttendances()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Failed to update attendance")
+      }
+    } catch (error) {
+      console.error("Error updating attendance:", error)
+      toast.error("Error updating attendance")
+    }
+  }
+
+  const handleDeleteAttendance = async (attendanceId: string) => {
+    if (!confirm("Are you sure you want to delete this attendance record?")) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/attendance/${attendanceId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        toast.success("Attendance record deleted")
+        fetchAttendances()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Failed to delete attendance")
+      }
+    } catch (error) {
+      console.error("Error deleting attendance:", error)
+      toast.error("Error deleting attendance")
     }
   }
 
@@ -286,6 +378,61 @@ export default function AttendancePage() {
                 </form>
               </DialogContent>
             </Dialog>
+
+            {/* Edit Attendance Dialog */}
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center">
+                    <RotateCcw className="mr-2 h-5 w-5" />
+                    Edit Attendance
+                  </DialogTitle>
+                  <DialogDescription>
+                    Update attendance record for {editingAttendance?.user.name}
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleUpdateAttendance}>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="editStatus">Status</Label>
+                      <Select 
+                        value={editFormData.status} 
+                        onValueChange={(value) => setEditFormData({ ...editFormData, status: value })}
+                      >
+                        <SelectTrigger id="editStatus">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="PRESENT">Present</SelectItem>
+                          <SelectItem value="ABSENT">Absent</SelectItem>
+                          <SelectItem value="LATE">Late</SelectItem>
+                          <SelectItem value="SICK_LEAVE">Sick Leave</SelectItem>
+                          <SelectItem value="VACATION">Vacation</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="editNotes">Notes</Label>
+                      <Textarea
+                        id="editNotes"
+                        value={editFormData.notes}
+                        onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                        placeholder="Any additional notes..."
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter className="mt-6">
+                    <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit">
+                      Update Attendance
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
@@ -368,6 +515,96 @@ export default function AttendancePage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
+              <Users className="mr-2 h-5 w-5" />
+              Quick Attendance - {selectedDate}
+            </CardTitle>
+            <CardDescription>
+              Quickly mark attendance for all staff members
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {users.length === 0 ? (
+              <div className="text-center py-8">
+                <Users className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No staff members</h3>
+                <p className="mt-1 text-sm text-gray-500">Add staff members to start tracking attendance.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {users.map((user) => {
+                  const existingAttendance = safeAttendances.find(att => att.user.id === user.id)
+                  return (
+                    <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                          <span className="text-sm font-medium text-gray-600">
+                            {user.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{user.name}</p>
+                          <p className="text-sm text-gray-500">{user.role}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {existingAttendance ? (
+                          <div className="flex items-center space-x-2">
+                            {getStatusBadge(existingAttendance.status)}
+                            <span className="text-sm text-gray-500">
+                              {new Date(existingAttendance.createdAt).toLocaleTimeString('en-US', { 
+                                hour: '2-digit', 
+                                minute: '2-digit' 
+                              })}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-blue-600 hover:bg-blue-50"
+                              onClick={() => handleEditAttendance(existingAttendance)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex space-x-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-green-600 border-green-600 hover:bg-green-50"
+                              onClick={() => markQuickAttendance(user.id, "PRESENT")}
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 border-red-600 hover:bg-red-50"
+                              onClick={() => markQuickAttendance(user.id, "ABSENT")}
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-yellow-600 border-yellow-600 hover:bg-yellow-50"
+                              onClick={() => markQuickAttendance(user.id, "LATE")}
+                            >
+                              <Clock className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
               <Calendar className="mr-2 h-5 w-5" />
               Attendance Records - {selectedDate}
             </CardTitle>
@@ -393,6 +630,7 @@ export default function AttendancePage() {
                     <TableHead>Status</TableHead>
                     <TableHead>Notes</TableHead>
                     <TableHead>Recorded At</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -411,6 +649,26 @@ export default function AttendancePage() {
                           hour: '2-digit', 
                           minute: '2-digit' 
                         })}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-blue-600 hover:bg-blue-50"
+                            onClick={() => handleEditAttendance(attendance)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:bg-red-50"
+                            onClick={() => handleDeleteAttendance(attendance.id)}
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

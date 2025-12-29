@@ -1,438 +1,371 @@
 import { prisma } from "./prisma"
-import { startOfDay, endOfDay, subDays, format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns"
+import { startOfDay, endOfDay, format, differenceInDays } from "date-fns"
 
-export interface ReportFilters {
-  startDate: Date
-  endDate: Date
+interface ReportRequest {
+  reportType: "comprehensive" | "production" | "attendance" | "daily" | "weekly" | "monthly"
+  startDate: string
+  endDate: string
   farmId?: string
   shedId?: string
   managerId?: string
 }
 
-export interface ProductionReport {
-  summary: {
-    totalEggs: number
-    sellableEggs: number
-    brokenEggs: number
-    damagedEggs: number
-    lossPercentage: number
-    averageDaily: number
-    daysReported: number
-  }
-  dailyData: Array<{
-    date: string
-    totalEggs: number
-    sellableEggs: number
-    brokenEggs: number
-    damagedEggs: number
-    lossPercentage: number
-  }>
-  shedBreakdown: Array<{
-    shedId: string
-    shedName: string
-    farmName: string
-    totalEggs: number
-    sellableEggs: number
-    efficiency: number
-    capacity: number
-  }>
+interface ProductionSummary {
+  totalEggs: number
+  sellableEggs: number
+  brokenEggs: number
+  damagedEggs: number
+  lossPercentage: number
+  averageDaily: number
 }
 
-export interface AttendanceReport {
-  summary: {
-    totalWorkers: number
-    averageAttendanceRate: number
-    totalWorkingDays: number
-    totalPresentDays: number
-    totalAbsentDays: number
-    totalLateDays: number
-  }
-  workerBreakdown: Array<{
-    userId: string
-    userName: string
-    totalDays: number
-    presentDays: number
-    absentDays: number
-    lateDays: number
-    attendanceRate: number
-    status: 'excellent' | 'good' | 'needs_improvement'
-  }>
-  dailyAttendance: Array<{
-    date: string
-    totalWorkers: number
-    presentWorkers: number
-    absentWorkers: number
-    lateWorkers: number
-    attendanceRate: number
-  }>
+interface AttendanceSummary {
+  totalWorkers: number
+  averageAttendanceRate: number
+  totalPresentDays: number
+  totalLateDays: number
+  totalAbsentDays: number
 }
 
-export interface ComprehensiveReport {
-  metadata: {
-    organizationName: string
-    reportType: string
-    dateRange: string
-    generatedAt: Date
-    generatedBy: string
-  }
-  production: ProductionReport
-  attendance: AttendanceReport
-  insights: {
-    topPerformingSheds: Array<{
-      shedName: string
-      farmName: string
-      efficiency: number
-      totalProduction: number
-    }>
-    productionTrends: {
-      trend: 'increasing' | 'decreasing' | 'stable'
-      changePercentage: number
-      description: string
-    }
-    attendanceInsights: {
-      trend: 'improving' | 'declining' | 'stable'
-      changePercentage: number
-      description: string
-    }
-    recommendations: string[]
-  }
+interface ShedBreakdown {
+  shedId: string
+  shedName: string
+  farmName: string
+  totalEggs: number
+  sellableEggs: number
+  brokenEggs: number
+  damagedEggs: number
+  efficiency: number
 }
 
-export class ReportService {
+interface WorkerBreakdown {
+  userId: string
+  userName: string
+  totalDays: number
+  presentDays: number
+  lateDays: number
+  absentDays: number
+  attendanceRate: number
+  status: 'excellent' | 'good' | 'needs_improvement'
+}
+
+export class ReportsService {
   constructor(private organizationId: string) {}
 
-  async generateProductionReport(filters: ReportFilters): Promise<ProductionReport> {
-    const whereClause: any = {
-      shed: {
-        farm: { organizationId: this.organizationId }
-      },
-      date: {
-        gte: startOfDay(filters.startDate),
-        lte: endOfDay(filters.endDate)
-      }
-    }
+  async generateReport(request: ReportRequest) {
+    const startDate = startOfDay(new Date(request.startDate))
+    const endDate = endOfDay(new Date(request.endDate))
+    const totalDays = differenceInDays(endDate, startDate) + 1
 
-    if (filters.farmId) {
-      whereClause.shed.farmId = filters.farmId
-    }
-
-    if (filters.shedId) {
-      whereClause.shedId = filters.shedId
-    }
-
-    // Get production data
-    const productions = await prisma.production.findMany({
-      where: whereClause,
-      include: {
-        shed: {
-          include: {
-            farm: {
-              select: { name: true }
-            }
-          }
-        }
-      },
-      orderBy: { date: 'asc' }
-    })
-
-    // Calculate summary
-    const summary = productions.reduce(
-      (acc, prod) => ({
-        totalEggs: acc.totalEggs + prod.totalEggs,
-        sellableEggs: acc.sellableEggs + prod.sellableEggs,
-        brokenEggs: acc.brokenEggs + prod.brokenEggs,
-        damagedEggs: acc.damagedEggs + prod.damagedEggs
-      }),
-      { totalEggs: 0, sellableEggs: 0, brokenEggs: 0, damagedEggs: 0 }
-    )
-
-    const lossPercentage = summary.totalEggs > 0 
-      ? ((summary.brokenEggs + summary.damagedEggs) / summary.totalEggs) * 100 
-      : 0
-
-    const uniqueDates = new Set(productions.map(p => format(p.date, 'yyyy-MM-dd')))
-    const daysReported = uniqueDates.size
-    const averageDaily = daysReported > 0 ? summary.sellableEggs / daysReported : 0
-
-    // Group by date for daily data
-    const dailyGroups = productions.reduce((acc, prod) => {
-      const dateKey = format(prod.date, 'yyyy-MM-dd')
-      if (!acc[dateKey]) {
-        acc[dateKey] = { totalEggs: 0, sellableEggs: 0, brokenEggs: 0, damagedEggs: 0 }
-      }
-      acc[dateKey].totalEggs += prod.totalEggs
-      acc[dateKey].sellableEggs += prod.sellableEggs
-      acc[dateKey].brokenEggs += prod.brokenEggs
-      acc[dateKey].damagedEggs += prod.damagedEggs
-      return acc
-    }, {} as Record<string, any>)
-
-    const dailyData = Object.entries(dailyGroups).map(([date, data]) => ({
-      date,
-      ...data,
-      lossPercentage: data.totalEggs > 0 ? ((data.brokenEggs + data.damagedEggs) / data.totalEggs) * 100 : 0
-    }))
-
-    // Group by shed for breakdown
-    const shedGroups = productions.reduce((acc, prod) => {
-      const shedKey = prod.shedId
-      if (!acc[shedKey]) {
-        acc[shedKey] = {
-          shedId: prod.shedId,
-          shedName: prod.shed.name,
-          farmName: prod.shed.farm.name,
-          capacity: prod.shed.capacity,
-          totalEggs: 0,
-          sellableEggs: 0
-        }
-      }
-      acc[shedKey].totalEggs += prod.totalEggs
-      acc[shedKey].sellableEggs += prod.sellableEggs
-      return acc
-    }, {} as Record<string, any>)
-
-    const shedBreakdown = Object.values(shedGroups).map((shed: any) => ({
-      ...shed,
-      efficiency: shed.capacity > 0 ? (shed.sellableEggs / daysReported / shed.capacity) * 100 : 0
-    }))
-
-    return {
-      summary: {
-        ...summary,
-        lossPercentage,
-        averageDaily,
-        daysReported
-      },
-      dailyData,
-      shedBreakdown
-    }
-  }
-
-  async generateAttendanceReport(filters: ReportFilters): Promise<AttendanceReport> {
-    const whereClause: any = {
-      user: { 
-        organizationId: this.organizationId,
-        role: 'WORKER',
-        isActive: true
-      },
-      date: {
-        gte: startOfDay(filters.startDate),
-        lte: endOfDay(filters.endDate)
-      }
-    }
-
-    if (filters.managerId) {
-      // Filter by workers under a specific manager (if farm management is implemented)
-      whereClause.user.managerId = filters.managerId
-    }
-
-    // Get attendance data
-    const attendanceRecords = await prisma.attendance.findMany({
-      where: whereClause,
-      include: {
-        user: {
-          select: { id: true, name: true, email: true }
-        }
-      },
-      orderBy: { date: 'asc' }
-    })
-
-    // Get all workers for the period
-    const workers = await prisma.user.findMany({
-      where: {
-        organizationId: this.organizationId,
-        role: 'WORKER',
-        isActive: true
-      },
-      select: { id: true, name: true, email: true }
-    })
-
-    // Calculate summary
-    const totalWorkers = workers.length
-    const totalPresentDays = attendanceRecords.filter(a => a.status === 'PRESENT').length
-    const totalAbsentDays = attendanceRecords.filter(a => a.status === 'ABSENT').length
-    const totalLateDays = attendanceRecords.filter(a => a.status === 'LATE').length
-    const totalWorkingDays = attendanceRecords.length
-    const averageAttendanceRate = totalWorkingDays > 0 
-      ? ((totalPresentDays + totalLateDays) / totalWorkingDays) * 100 
-      : 0
-
-    // Worker breakdown
-    const workerGroups = workers.map(worker => {
-      const workerRecords = attendanceRecords.filter(a => a.userId === worker.id)
-      const presentDays = workerRecords.filter(a => a.status === 'PRESENT').length
-      const absentDays = workerRecords.filter(a => a.status === 'ABSENT').length
-      const lateDays = workerRecords.filter(a => a.status === 'LATE').length
-      const totalDays = workerRecords.length
-      const attendanceRate = totalDays > 0 ? ((presentDays + lateDays) / totalDays) * 100 : 0
-
-      let status: 'excellent' | 'good' | 'needs_improvement'
-      if (attendanceRate >= 95) status = 'excellent'
-      else if (attendanceRate >= 85) status = 'good'
-      else status = 'needs_improvement'
-
-      return {
-        userId: worker.id,
-        userName: worker.name || worker.email,
-        totalDays,
-        presentDays,
-        absentDays,
-        lateDays,
-        attendanceRate,
-        status
-      }
-    })
-
-    // Daily attendance
-    const dailyGroups = attendanceRecords.reduce((acc, record) => {
-      const dateKey = format(record.date, 'yyyy-MM-dd')
-      if (!acc[dateKey]) {
-        acc[dateKey] = { present: 0, absent: 0, late: 0, total: 0 }
-      }
-      if (record.status === 'PRESENT') acc[dateKey].present++
-      else if (record.status === 'ABSENT') acc[dateKey].absent++
-      else if (record.status === 'LATE') acc[dateKey].late++
-      acc[dateKey].total++
-      return acc
-    }, {} as Record<string, any>)
-
-    const dailyAttendance = Object.entries(dailyGroups).map(([date, data]) => ({
-      date,
-      totalWorkers: data.total,
-      presentWorkers: data.present,
-      absentWorkers: data.absent,
-      lateWorkers: data.late,
-      attendanceRate: data.total > 0 ? ((data.present + data.late) / data.total) * 100 : 0
-    }))
-
-    return {
-      summary: {
-        totalWorkers,
-        averageAttendanceRate,
-        totalWorkingDays,
-        totalPresentDays,
-        totalAbsentDays,
-        totalLateDays
-      },
-      workerBreakdown: workerGroups,
-      dailyAttendance
-    }
-  }
-
-  async generateComprehensiveReport(
-    filters: ReportFilters,
-    generatedBy: string
-  ): Promise<ComprehensiveReport> {
     // Get organization info
     const organization = await prisma.organization.findUnique({
       where: { id: this.organizationId },
       select: { name: true }
     })
 
-    const [productionReport, attendanceReport] = await Promise.all([
-      this.generateProductionReport(filters),
-      this.generateAttendanceReport(filters)
-    ])
-
-    // Generate insights
-    const topPerformingSheds = productionReport.shedBreakdown
-      .sort((a, b) => b.efficiency - a.efficiency)
-      .slice(0, 5)
-      .map(shed => ({
-        shedName: shed.shedName,
-        farmName: shed.farmName,
-        efficiency: shed.efficiency,
-        totalProduction: shed.sellableEggs
-      }))
-
-    // Calculate trends (simplified - compare first and last week)
-    const dailyData = productionReport.dailyData
-    const firstWeekAvg = dailyData.slice(0, 7).reduce((sum, day) => sum + day.sellableEggs, 0) / 7
-    const lastWeekAvg = dailyData.slice(-7).reduce((sum, day) => sum + day.sellableEggs, 0) / 7
-    const productionChange = firstWeekAvg > 0 ? ((lastWeekAvg - firstWeekAvg) / firstWeekAvg) * 100 : 0
-
-    let productionTrend: 'increasing' | 'decreasing' | 'stable'
-    if (Math.abs(productionChange) < 5) productionTrend = 'stable'
-    else if (productionChange > 0) productionTrend = 'increasing'
-    else productionTrend = 'decreasing'
-
-    // Attendance trends
-    const attendanceData = attendanceReport.dailyAttendance
-    const firstWeekAttendance = attendanceData.slice(0, 7).reduce((sum, day) => sum + day.attendanceRate, 0) / 7
-    const lastWeekAttendance = attendanceData.slice(-7).reduce((sum, day) => sum + day.attendanceRate, 0) / 7
-    const attendanceChange = firstWeekAttendance > 0 ? ((lastWeekAttendance - firstWeekAttendance) / firstWeekAttendance) * 100 : 0
-
-    let attendanceTrend: 'improving' | 'declining' | 'stable'
-    if (Math.abs(attendanceChange) < 3) attendanceTrend = 'stable'
-    else if (attendanceChange > 0) attendanceTrend = 'improving'
-    else attendanceTrend = 'declining'
-
-    // Generate recommendations
-    const recommendations: string[] = []
-    
-    if (productionReport.summary.lossPercentage > 10) {
-      recommendations.push("High egg loss rate detected. Review handling procedures and storage conditions.")
-    }
-    
-    if (attendanceReport.summary.averageAttendanceRate < 85) {
-      recommendations.push("Low attendance rate. Consider reviewing work conditions and incentive programs.")
-    }
-    
-    if (topPerformingSheds.length > 0 && topPerformingSheds[0].efficiency < 70) {
-      recommendations.push("Overall shed efficiency is below optimal. Review feeding schedules and environmental conditions.")
+    const metadata = {
+      reportType: this.getReportTypeLabel(request.reportType),
+      organizationName: organization?.name || "Unknown Organization",
+      dateRange: `${format(startDate, 'MMM dd, yyyy')} - ${format(endDate, 'MMM dd, yyyy')}`,
+      generatedAt: new Date().toISOString(),
+      totalDays
     }
 
-    const lowPerformingWorkers = attendanceReport.workerBreakdown.filter(w => w.status === 'needs_improvement')
-    if (lowPerformingWorkers.length > 0) {
-      recommendations.push(`${lowPerformingWorkers.length} workers need attendance improvement. Consider individual coaching sessions.`)
+    let reportData: any = { metadata }
+
+    // Generate different sections based on report type
+    if (request.reportType === "comprehensive" || request.reportType === "production") {
+      reportData.production = await this.getProductionData(startDate, endDate, request)
+    }
+
+    if (request.reportType === "comprehensive" || request.reportType === "attendance") {
+      reportData.attendance = await this.getAttendanceData(startDate, endDate, request)
+    }
+
+    // Add insights for comprehensive reports
+    if (request.reportType === "comprehensive") {
+      reportData.insights = await this.generateInsights(reportData, totalDays)
+    }
+
+    return reportData
+  }
+
+  private async getProductionData(startDate: Date, endDate: Date, request: ReportRequest) {
+    // Build where clause for filtering
+    const whereClause: any = {
+      shed: {
+        farm: { 
+          organizationId: this.organizationId,
+          isActive: true
+        },
+        isActive: true
+      },
+      date: {
+        gte: startDate,
+        lte: endDate
+      }
+    }
+
+    if (request.farmId) {
+      whereClause.shed.farm.id = request.farmId
+    }
+
+    if (request.shedId) {
+      whereClause.shed.id = request.shedId
+    }
+
+    // Get production summary
+    const productionSummary = await prisma.production.aggregate({
+      where: whereClause,
+      _sum: {
+        totalEggs: true,
+        sellableEggs: true,
+        brokenEggs: true,
+        damagedEggs: true
+      }
+    })
+
+    const totalEggs = productionSummary._sum.totalEggs || 0
+    const sellableEggs = productionSummary._sum.sellableEggs || 0
+    const brokenEggs = productionSummary._sum.brokenEggs || 0
+    const damagedEggs = productionSummary._sum.damagedEggs || 0
+    const lossEggs = brokenEggs + damagedEggs
+    const lossPercentage = totalEggs > 0 ? (lossEggs / totalEggs) * 100 : 0
+    const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)))
+    const averageDaily = sellableEggs / totalDays
+
+    const summary: ProductionSummary = {
+      totalEggs,
+      sellableEggs,
+      brokenEggs,
+      damagedEggs,
+      lossPercentage,
+      averageDaily
+    }
+
+    // Get shed breakdown
+    const shedBreakdown = await prisma.shed.findMany({
+      where: {
+        farm: {
+          organizationId: this.organizationId,
+          isActive: true,
+          ...(request.farmId && { id: request.farmId })
+        },
+        isActive: true,
+        ...(request.shedId && { id: request.shedId })
+      },
+      include: {
+        farm: {
+          select: { name: true }
+        },
+        productions: {
+          where: {
+            date: {
+              gte: startDate,
+              lte: endDate
+            }
+          },
+          select: {
+            totalEggs: true,
+            sellableEggs: true,
+            brokenEggs: true,
+            damagedEggs: true
+          }
+        }
+      }
+    })
+
+    const shedBreakdownData: ShedBreakdown[] = shedBreakdown.map(shed => {
+      const shedTotalEggs = shed.productions.reduce((sum, p) => sum + p.totalEggs, 0)
+      const shedSellableEggs = shed.productions.reduce((sum, p) => sum + p.sellableEggs, 0)
+      const shedBrokenEggs = shed.productions.reduce((sum, p) => sum + p.brokenEggs, 0)
+      const shedDamagedEggs = shed.productions.reduce((sum, p) => sum + p.damagedEggs, 0)
+      const efficiency = shed.capacity > 0 ? (shedSellableEggs / totalDays / shed.capacity) * 100 : 0
+
+      return {
+        shedId: shed.id,
+        shedName: shed.name,
+        farmName: shed.farm.name,
+        totalEggs: shedTotalEggs,
+        sellableEggs: shedSellableEggs,
+        brokenEggs: shedBrokenEggs,
+        damagedEggs: shedDamagedEggs,
+        efficiency: Math.min(efficiency, 100) // Cap at 100%
+      }
+    })
+
+    return {
+      summary,
+      shedBreakdown: shedBreakdownData
+    }
+  }
+
+  private async getAttendanceData(startDate: Date, endDate: Date, request: ReportRequest) {
+    // Build where clause for filtering
+    const whereClause: any = {
+      user: {
+        organizationId: this.organizationId,
+        role: "WORKER",
+        isActive: true
+      },
+      date: {
+        gte: startDate,
+        lte: endDate
+      }
+    }
+
+    if (request.managerId) {
+      // If filtering by manager, we'd need to add manager relationship to workers
+      // For now, we'll skip this filter
+    }
+
+    // Get all workers
+    const workers = await prisma.user.findMany({
+      where: {
+        organizationId: this.organizationId,
+        role: "WORKER",
+        isActive: true
+      },
+      include: {
+        attendanceRecords: {
+          where: {
+            date: {
+              gte: startDate,
+              lte: endDate
+            }
+          }
+        }
+      }
+    })
+
+    let totalPresentDays = 0
+    let totalLateDays = 0
+    let totalAbsentDays = 0
+    let totalAttendanceRecords = 0
+
+    const workerBreakdown: WorkerBreakdown[] = workers.map(worker => {
+      const totalDays = worker.attendanceRecords.length
+      const presentDays = worker.attendanceRecords.filter(a => a.status === "PRESENT").length
+      const lateDays = worker.attendanceRecords.filter(a => a.status === "LATE").length
+      const absentDays = worker.attendanceRecords.filter(a => a.status === "ABSENT").length
+      const attendanceRate = totalDays > 0 ? ((presentDays + lateDays) / totalDays) * 100 : 0
+
+      // Update totals
+      totalPresentDays += presentDays
+      totalLateDays += lateDays
+      totalAbsentDays += absentDays
+      totalAttendanceRecords += totalDays
+
+      // Determine status
+      let status: 'excellent' | 'good' | 'needs_improvement'
+      if (attendanceRate >= 95) {
+        status = 'excellent'
+      } else if (attendanceRate >= 85) {
+        status = 'good'
+      } else {
+        status = 'needs_improvement'
+      }
+
+      return {
+        userId: worker.id,
+        userName: worker.name || worker.email,
+        totalDays,
+        presentDays,
+        lateDays,
+        absentDays,
+        attendanceRate,
+        status
+      }
+    })
+
+    const averageAttendanceRate = totalAttendanceRecords > 0 
+      ? ((totalPresentDays + totalLateDays) / totalAttendanceRecords) * 100 
+      : 0
+
+    const summary: AttendanceSummary = {
+      totalWorkers: workers.length,
+      averageAttendanceRate,
+      totalPresentDays,
+      totalLateDays,
+      totalAbsentDays
     }
 
     return {
-      metadata: {
-        organizationName: organization?.name || 'Unknown Organization',
-        reportType: 'Comprehensive Farm Report',
-        dateRange: `${format(filters.startDate, 'MMM dd, yyyy')} - ${format(filters.endDate, 'MMM dd, yyyy')}`,
-        generatedAt: new Date(),
-        generatedBy
-      },
-      production: productionReport,
-      attendance: attendanceReport,
-      insights: {
-        topPerformingSheds,
-        productionTrends: {
-          trend: productionTrend,
-          changePercentage: Math.abs(productionChange),
-          description: `Production is ${productionTrend} by ${Math.abs(productionChange).toFixed(1)}% compared to the beginning of the period.`
-        },
-        attendanceInsights: {
-          trend: attendanceTrend,
-          changePercentage: Math.abs(attendanceChange),
-          description: `Attendance is ${attendanceTrend} by ${Math.abs(attendanceChange).toFixed(1)}% compared to the beginning of the period.`
-        },
-        recommendations
-      }
+      summary,
+      workerBreakdown
     }
   }
 
-  // Predefined report templates
-  async generateDailyReport(date: Date = new Date()): Promise<ComprehensiveReport> {
-    return this.generateComprehensiveReport({
-      startDate: startOfDay(date),
-      endDate: endOfDay(date)
-    }, 'System - Daily Report')
+  private async generateInsights(reportData: any, totalDays: number) {
+    const insights: any = {}
+
+    // Production insights
+    if (reportData.production) {
+      const { summary, shedBreakdown } = reportData.production
+      
+      insights.productionTrends = {
+        description: `Average daily production of ${Math.round(summary.averageDaily)} eggs with ${summary.lossPercentage.toFixed(1)}% loss rate over ${totalDays} days.`
+      }
+
+      // Find best and worst performing sheds
+      if (shedBreakdown && shedBreakdown.length > 0) {
+        const sortedSheds = shedBreakdown.sort((a: any, b: any) => b.efficiency - a.efficiency)
+        const bestShed = sortedSheds[0]
+        const worstShed = sortedSheds[sortedSheds.length - 1]
+        
+        insights.shedPerformance = {
+          bestShed: bestShed.shedName,
+          worstShed: worstShed.shedName,
+          description: `${bestShed.shedName} is the top performer with ${bestShed.efficiency.toFixed(1)}% efficiency.`
+        }
+      }
+    }
+
+    // Attendance insights
+    if (reportData.attendance) {
+      const { summary, workerBreakdown } = reportData.attendance
+      
+      insights.attendanceInsights = {
+        description: `Overall attendance rate of ${summary.averageAttendanceRate.toFixed(1)}% across ${summary.totalWorkers} workers.`
+      }
+    }
+
+    // Generate recommendations
+    const recommendations: string[] = []
+
+    if (reportData.production?.summary.lossPercentage > 10) {
+      recommendations.push("High egg loss rate detected. Consider reviewing handling procedures and storage conditions.")
+    }
+
+    if (reportData.attendance?.summary.averageAttendanceRate < 85) {
+      recommendations.push("Low attendance rate. Consider implementing attendance incentives or reviewing work conditions.")
+    }
+
+    if (reportData.production?.shedBreakdown) {
+      const lowPerformingSheds = reportData.production.shedBreakdown.filter((shed: any) => shed.efficiency < 60)
+      if (lowPerformingSheds.length > 0) {
+        recommendations.push(`${lowPerformingSheds.length} shed(s) showing low efficiency. Review feeding schedules and environmental conditions.`)
+      }
+    }
+
+    if (recommendations.length === 0) {
+      recommendations.push("Operations are performing well. Continue current practices and monitor trends.")
+    }
+
+    insights.recommendations = recommendations
+
+    return insights
   }
 
-  async generateWeeklyReport(date: Date = new Date()): Promise<ComprehensiveReport> {
-    return this.generateComprehensiveReport({
-      startDate: startOfWeek(date),
-      endDate: endOfWeek(date)
-    }, 'System - Weekly Report')
-  }
-
-  async generateMonthlyReport(date: Date = new Date()): Promise<ComprehensiveReport> {
-    return this.generateComprehensiveReport({
-      startDate: startOfMonth(date),
-      endDate: endOfMonth(date)
-    }, 'System - Monthly Report')
+  private getReportTypeLabel(reportType: string): string {
+    const labels: Record<string, string> = {
+      comprehensive: "Comprehensive Report",
+      production: "Production Report",
+      attendance: "Attendance Report",
+      daily: "Daily Summary",
+      weekly: "Weekly Summary",
+      monthly: "Monthly Summary"
+    }
+    return labels[reportType] || "Report"
   }
 }

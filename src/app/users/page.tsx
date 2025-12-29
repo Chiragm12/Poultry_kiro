@@ -36,6 +36,9 @@ export default function UsersPage() {
     email: "",
     role: "WORKER",
     password: "",
+    address: "",
+    phoneNumber: "",
+    aadharNumber: "",
     isActive: true
   })
 
@@ -84,7 +87,7 @@ export default function UsersPage() {
       if (response.ok) {
         toast.success("User created successfully")
         setIsCreateDialogOpen(false)
-        setFormData({ name: "", email: "", role: "WORKER", password: "", isActive: true })
+        setFormData({ name: "", email: "", role: "WORKER", password: "", address: "", phoneNumber: "", aadharNumber: "", isActive: true })
         fetchUsers()
       } else {
         const error = await response.json()
@@ -262,6 +265,43 @@ export default function UsersPage() {
                     />
                     <p className="text-xs text-gray-500 mt-1">Minimum 6 characters required</p>
                   </div>
+                  
+                  {/* Additional fields for Workers and Managers only */}
+                  {(formData.role === "WORKER" || formData.role === "MANAGER") && (
+                    <>
+                      <div>
+                        <Label htmlFor="phoneNumber">Phone Number</Label>
+                        <Input
+                          id="phoneNumber"
+                          type="tel"
+                          value={formData.phoneNumber}
+                          onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+                          placeholder="Enter phone number"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="address">Address</Label>
+                        <Input
+                          id="address"
+                          value={formData.address}
+                          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                          placeholder="Enter full address"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="aadharNumber">Aadhar Number</Label>
+                        <Input
+                          id="aadharNumber"
+                          value={formData.aadharNumber}
+                          onChange={(e) => setFormData({ ...formData, aadharNumber: e.target.value })}
+                          placeholder="Enter 12-digit Aadhar number"
+                          maxLength={12}
+                          pattern="[0-9]{12}"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">12-digit Aadhar number (optional)</p>
+                      </div>
+                    </>
+                  )}
                 </div>
                 <DialogFooter className="mt-6">
                   <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
