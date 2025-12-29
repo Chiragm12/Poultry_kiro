@@ -102,7 +102,8 @@ export function handleApiError(error: unknown): NextResponse {
 
   if (error instanceof ZodError) {
     console.error("Validation errors:", error.errors)
-    return createErrorResponse(`Invalid input data: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`, 400)
+    const errorMessages = error.errors?.map(e => `${e.path.join('.')}: ${e.message}`).join(', ') || 'Validation failed'
+    return createErrorResponse(`Invalid input data: ${errorMessages}`, 400)
   }
 
   if (error instanceof Error) {

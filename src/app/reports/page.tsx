@@ -11,12 +11,12 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import DashboardLayout from "@/components/layout/dashboard-layout"
-import { 
-  FileText, 
-  Download, 
-  Calendar, 
-  TrendingUp, 
-  Users, 
+import {
+  FileText,
+  Download,
+  Calendar,
+  TrendingUp,
+  Users,
   Egg,
   AlertTriangle,
   CheckCircle,
@@ -97,7 +97,7 @@ export default function ReportsPage() {
 
   const getDateRange = () => {
     const now = new Date()
-    
+
     switch (dateRange) {
       case "7d":
         return { startDate: subDays(now, 7), endDate: now }
@@ -121,10 +121,10 @@ export default function ReportsPage() {
 
   const generateReport = async () => {
     setLoading(true)
-    
+
     try {
       const { startDate, endDate } = getDateRange()
-      
+
       const requestBody = {
         reportType,
         startDate: startDate.toISOString(),
@@ -158,34 +158,44 @@ export default function ReportsPage() {
     }
   }
 
-  const exportReport = (format: 'pdf' | 'csv' | 'excel') => {
+  const exportReport = (exportFormat: 'pdf' | 'csv' | 'excel') => {
     if (!reportData) {
       toast.error("No report data to export")
       return
     }
 
     try {
+      console.log("Starting export for format:", exportFormat)
+      console.log("Report data:", reportData)
+
       // Create export data based on format
-      let exportData: any
-      let filename: string
-      let mimeType: string
+      let exportData: string = ""
+      let filename: string = ""
+      let mimeType: string = ""
 
       const timestamp = format(new Date(), 'yyyy-MM-dd-HHmm')
-      
-      if (format === 'csv') {
+
+      if (exportFormat === 'csv') {
         // Convert report data to CSV
+        console.log("Converting to CSV...")
         exportData = convertToCSV(reportData)
+        console.log("CSV data length:", exportData.length)
         filename = `report-${timestamp}.csv`
         mimeType = 'text/csv'
-      } else if (format === 'excel') {
+      } else if (exportFormat === 'excel') {
         toast.info("Excel export coming soon")
         return
-      } else if (format === 'pdf') {
+      } else if (exportFormat === 'pdf') {
         toast.info("PDF export coming soon")
         return
       }
 
+      if (!exportData) {
+        throw new Error("No export data generated")
+      }
+
       // Create download link
+      console.log("Creating download link...")
       const blob = new Blob([exportData], { type: mimeType })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -196,66 +206,107 @@ export default function ReportsPage() {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
 
-      toast.success(`Report exported as ${format.toUpperCase()}`)
+      console.log("Export completed successfully")
+      toast.success(`Report exported as ${exportFormat.toUpperCase()}`)
     } catch (error) {
       console.error("Export error:", error)
-      toast.error("Failed to export report")
+      toast.error(`Failed to export report: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   const convertToCSV = (data: any): string => {
-    const lines: string[] = []
-    
-    // Add metadata
-    lines.push(`Report Type,${data.metadata?.reportType || 'N/A'}`)
-    lines.push(`Organization,${data.metadata?.organizationName || 'N/A'}`)
-    lines.push(`Date Range,${data.metadata?.dateRange || 'N/A'}`)
-    lines.push(`Generated At,${data.metadata?.generatedAt || new Date().toISOString()}`)
-    lines.push('') // Empty line
+    try {
+      console.log("Converting data to CSV:", data)
+      const lines: string[] = []
 
-    // Add production summary
-    if (data.production) {
-      lines.push('PRODUCTION SUMMARY')
-      lines.push('Metric,Value')
-      lines.push(`Total Eggs,${data.production.summary.totalEggs}`)
-      lines.push(`Sellable Eggs,${data.production.summary.sellableEggs}`)
-      lines.push(`Damaged Eggs,${data.production.summary.damagedEggs || 0}`)
-      lines.push(`Loss Percentage,${data.production.summary.lossPercentage.toFixed(2)}%`)
-      lines.push(`Average Daily,${data.production.summary.averageDaily.toFixed(2)}`)
+      // Add metadata
+      lines.push(`Report Type,${data.metadata?.reportType || 'N/A'}`)
+      lines.push(`Organization,${data.metadata?.organizationName || 'N/A'}`)
+      lines.push(`Date Range,${data.metadata?.dateRange || 'N/A'}`)
+      lines.push(`Generated At,${data.metadata?.generatedAt || new Date().toISOString()}`)
       lines.push('') // Empty line
 
-      // Add shed breakdown
-      if (data.production.shedBreakdown?.length > 0) {
-        lines.push('SHED PERFORMANCE')
-        lines.push('Shed Name,Farm Name,Total Eggs,Sellable Eggs,Efficiency')
-        data.production.shedBreakdown.forEach((shed: any) => {
-          lines.push(`${shed.shedName},${shed.farmName},${shed.totalEggs},${shed.sellableEggs},${shed.efficiency.toFixed(2)}%`)
-        })
+      // Add production summary
+      if (data.production && data.production.summary) {
+        console.log("Adding production summary")
+        lines.push('PRODUCTION SUMMARY')
+        lines.push('Metric,Value')
+        lines.push(`Total Eggs,${data.production.summary.totalEggs || 0}`)
+        lines.push(`Sellable Eggs,${data.production.summary.sellableEggs || 0}`)
+        lines.push(`Broken Eggs,${data.production.summary.brokenEggs || 0}`)
+        lines.push(`Damaged Eggs,${data.production.summary.damagedEggs || 0}`)
+        lines.push(`Loss Percentage,${(data.production.summary.lossPercentage || 0).toFixed(2)}%`)
+        lines.push(`Average Daily,${(data.production.summary.averageDaily || 0).toFixed(2)}`)
         lines.push('') // Empty line
+
+        // Add shed breakdown
+        if (data.production.shedBreakdown && Array.isArray(data.production.shedBreakdown) && data.production.shedBreakdown.length > 0) {
+          console.log("Adding shed breakdown")
+          lines.push('SHED PERFORMANCE')
+          lines.push('Shed Name,Farm Name,Total Eggs,Sellable Eggs,Broken Eggs,Damaged Eggs,Efficiency')
+          data.production.shedBreakdown.forEach((shed: any) => {
+            lines.push(`"${shed.shedName || 'Unknown'}","${shed.farmName || 'Unknown'}",${shed.totalEggs || 0},${shed.sellableEggs || 0},${shed.brokenEggs || 0},${shed.damagedEggs || 0},${(shed.efficiency || 0).toFixed(2)}%`)
+          })
+          lines.push('') // Empty line
+        }
       }
-    }
 
-    // Add attendance summary
-    if (data.attendance) {
-      lines.push('ATTENDANCE SUMMARY')
-      lines.push('Metric,Value')
-      lines.push(`Total Workers,${data.attendance.summary.totalWorkers}`)
-      lines.push(`Average Attendance Rate,${data.attendance.summary.averageAttendanceRate.toFixed(2)}%`)
-      lines.push(`Total Late Days,${data.attendance.summary.totalLateDays}`)
-      lines.push(`Total Absent Days,${data.attendance.summary.totalAbsentDays}`)
-      lines.push('') // Empty line
+      // Add attendance summary
+      if (data.attendance && data.attendance.summary) {
+        console.log("Adding attendance summary")
+        lines.push('ATTENDANCE SUMMARY')
+        lines.push('Metric,Value')
+        lines.push(`Total Workers,${data.attendance.summary.totalWorkers || 0}`)
+        lines.push(`Average Attendance Rate,${(data.attendance.summary.averageAttendanceRate || 0).toFixed(2)}%`)
+        lines.push(`Total Present Days,${data.attendance.summary.totalPresentDays || 0}`)
+        lines.push(`Total Late Days,${data.attendance.summary.totalLateDays || 0}`)
+        lines.push(`Total Absent Days,${data.attendance.summary.totalAbsentDays || 0}`)
+        lines.push('') // Empty line
 
-      // Add worker breakdown
-      if (data.attendance.workerBreakdown?.length > 0) {
-        lines.push('WORKER PERFORMANCE')
-        lines.push('Worker Name,Total Days,Present Days,Late Days,Absent Days,Attendance Rate,Status')
-        data.attendance.workerBreakdown.forEach((worker: any) => {
-          lines.push(`${worker.userName},${worker.totalDays},${worker.presentDays},${worker.lateDays},${worker.absentDays},${worker.attendanceRate.toFixed(2)}%,${worker.status}`)
-        })
+        // Add worker breakdown
+        if (data.attendance.workerBreakdown && Array.isArray(data.attendance.workerBreakdown) && data.attendance.workerBreakdown.length > 0) {
+          console.log("Adding worker breakdown")
+          lines.push('WORKER PERFORMANCE')
+          lines.push('Worker Name,Total Days,Present Days,Late Days,Absent Days,Attendance Rate,Status')
+          data.attendance.workerBreakdown.forEach((worker: any) => {
+            lines.push(`"${worker.userName || 'Unknown'}",${worker.totalDays || 0},${worker.presentDays || 0},${worker.lateDays || 0},${worker.absentDays || 0},${(worker.attendanceRate || 0).toFixed(2)}%,${worker.status || 'Unknown'}`)
+          })
+          lines.push('') // Empty line
+        }
       }
-    }
 
-    return lines.join('\n')
+      // Add insights
+      if (data.insights) {
+        console.log("Adding insights")
+        lines.push('INSIGHTS & RECOMMENDATIONS')
+
+        if (data.insights.productionTrends) {
+          lines.push('Production Trends')
+          lines.push(`"${data.insights.productionTrends.description || 'No data'}"`)
+          lines.push('')
+        }
+
+        if (data.insights.attendanceInsights) {
+          lines.push('Attendance Insights')
+          lines.push(`"${data.insights.attendanceInsights.description || 'No data'}"`)
+          lines.push('')
+        }
+
+        if (data.insights.recommendations && Array.isArray(data.insights.recommendations)) {
+          lines.push('Recommendations')
+          data.insights.recommendations.forEach((rec: string, index: number) => {
+            lines.push(`${index + 1},"${rec}"`)
+          })
+        }
+      }
+
+      const csvContent = lines.join('\n')
+      console.log("CSV conversion completed, length:", csvContent.length)
+      return csvContent
+    } catch (error) {
+      console.error("Error in convertToCSV:", error)
+      throw new Error(`CSV conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   if (!session?.user) {
@@ -413,8 +464,8 @@ export default function ReportsPage() {
                   </div>
                 )}
 
-                <Button 
-                  onClick={generateReport} 
+                <Button
+                  onClick={generateReport}
                   disabled={loading}
                   className="w-full"
                 >
@@ -454,13 +505,13 @@ export default function ReportsPage() {
                       <div className="flex items-center space-x-2">
                         <Badge variant="outline">
                           <Clock className="mr-1 h-3 w-3" />
-                          {reportData.metadata?.generatedAt ? 
-                            format(new Date(reportData.metadata.generatedAt), 'MMM dd, HH:mm') : 
+                          {reportData.metadata?.generatedAt ?
+                            format(new Date(reportData.metadata.generatedAt), 'MMM dd, HH:mm') :
                             'Just now'
                           }
                         </Badge>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => exportReport('csv')}
                         >
@@ -595,10 +646,10 @@ export default function ReportsPage() {
                                     </div>
                                     <Badge variant={
                                       worker.status === 'excellent' ? 'default' :
-                                      worker.status === 'good' ? 'secondary' : 'destructive'
+                                        worker.status === 'good' ? 'secondary' : 'destructive'
                                     }>
                                       {worker.status === 'excellent' ? 'Excellent' :
-                                       worker.status === 'good' ? 'Good' : 'Needs Improvement'}
+                                        worker.status === 'good' ? 'Good' : 'Needs Improvement'}
                                     </Badge>
                                   </div>
                                 </div>
@@ -671,4 +722,4 @@ export default function ReportsPage() {
       </div>
     </DashboardLayout>
   )
-}
+} 

@@ -79,6 +79,9 @@ model User {
   role           String    @default("WORKER") // OWNER, MANAGER, WORKER
   isActive       Boolean   @default(true)
   phone          String?
+  phoneNumber    String?   // New field for consistency with API
+  address        String?   // New field
+  aadharNumber   String?   // New field for Indian Aadhar ID
   avatar         String?
   organizationId String
   createdAt      DateTime  @default(now())
@@ -149,9 +152,17 @@ model Production {
   id           String   @id @default(cuid())
   date         DateTime
   totalEggs    Int
-  brokenEggs   Int      @default(0)
-  damagedEggs  Int      @default(0)
-  sellableEggs Int // Calculated: totalEggs - brokenEggs - damagedEggs
+  normalEggs   Int      @default(0)  // Good quality eggs for sale
+  commEggs     Int      @default(0)  // Commercial grade eggs
+  waterEggs    Int      @default(0)  // Water damaged eggs
+  jellyEggs    Int      @default(0)  // Jelly/soft shell eggs
+  creakEggs    Int      @default(0)  // Cracked eggs
+  leakerEggs   Int      @default(0)  // Leaking eggs
+  jumboEggs    Int      @default(0)  // Keep for backward compatibility
+  crackedEggs  Int      @default(0)  // Keep for backward compatibility
+  brokenEggs   Int      @default(0)  // Keep for backward compatibility
+  damagedEggs  Int      @default(0)  // Keep for backward compatibility
+  sellableEggs Int // Calculated: normalEggs + commEggs
   notes        String?
   shedId       String
   createdAt    DateTime @default(now())

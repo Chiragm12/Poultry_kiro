@@ -5,15 +5,15 @@ import { createSuccessResponse, createErrorResponse, handleApiError, getOrganiza
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const organizationId = getOrganizationId(request)
-    const productionId = params.id
+    const { id } = await params
+    const organizationId = await getOrganizationId(request)
 
     const production = await prisma.production.findFirst({
       where: {
-        id: productionId,
+        id,
         shed: {
           farm: {
             organizationId,
@@ -49,12 +49,12 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const organizationId = getOrganizationId(request)
-    const userRole = getUserRole(request)
-    const productionId = params.id
+    const { id } = await params
+    const organizationId = await getOrganizationId(request)
+    const userRole = await getUserRole(request)
 
     // Only OWNER and MANAGER can update production records
     if (!["OWNER", "MANAGER"].includes(userRole)) {
@@ -67,7 +67,7 @@ export async function PUT(
     // Verify production record exists and belongs to the organization
     const existingProduction = await prisma.production.findFirst({
       where: {
-        id: productionId,
+        id,
         shed: {
           farm: {
             organizationId,
@@ -80,23 +80,34 @@ export async function PUT(
       return createErrorResponse("Production record not found", 404)
     }
 
-    // Calculate sellable eggs if any of the egg counts are being updated
+    // Calculate sellable eggs (normal + commercial eggs)
     let sellableEggs = existingProduction.sellableEggs
-    if (validatedData.totalEggs !== undefined || validatedData.brokenEggs !== undefined || validatedData.damagedEggs !== undefined) {
-      const totalEggs = validatedData.totalEggs ?? existingProduction.totalEggs
-      const brokenEggs = validatedData.brokenEggs ?? existingProduction.brokenEggs
-      const damagedEggs = validatedData.damagedEggs ?? existingProduction.damagedEggs
-      sellableEggs = totalEggs - brokenEggs - damagedEggs
+    if (validatedData.normalEggs !== undefined || validatedData.commEggs !== undefined) {
+      const normalEggs = validatedData.normalEggs ?? existingProduction.normalEggs
+      const commEggs = validatedData.commEggs ?? existingProduction.commEggs
+      sellableEggs = normalEggs + commEggs
+    }
+
+    // Update backward compatibility fields
+    const updateData: any = {
+      ...validatedData,
+      sellableEggs,
+    }
+
+    // Handle backward compatibility
+    if (validatedData.creakEggs !== undefined) {
+      updateData.crackedEggs = validatedData.creakEggs
+      updateData.brokenEggs = validatedData.creakEggs
+    }
+    if (validatedData.jellyEggs !== undefined) {
+      updateData.damagedEggs = validatedData.jellyEggs
     }
 
     const production = await prisma.production.update({
       where: {
-        id: productionId,
+        id,
       },
-      data: {
-        ...validatedData,
-        sellableEggs,
-      },
+      data: updateData,
       include: {
         shed: {
           select: {
@@ -122,12 +133,12 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const organizationId = getOrganizationId(request)
-    const userRole = getUserRole(request)
-    const productionId = params.id
+    const { id } = await params
+    const organizationId = await getOrganizationId(request)
+    const userRole = await getUserRole(request)
 
     // Only OWNER and MANAGER can delete production records
     if (!["OWNER", "MANAGER"].includes(userRole)) {
@@ -137,7 +148,7 @@ export async function DELETE(
     // Verify production record exists and belongs to the organization
     const existingProduction = await prisma.production.findFirst({
       where: {
-        id: productionId,
+        id,
         shed: {
           farm: {
             organizationId,
@@ -152,7 +163,7 @@ export async function DELETE(
 
     await prisma.production.delete({
       where: {
-        id: productionId,
+        id,
       },
     })
 
