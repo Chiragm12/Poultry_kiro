@@ -5,11 +5,11 @@ import { createSuccessResponse, createErrorResponse, handleApiError, getOrganiza
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const organizationId = getOrganizationId(request)
-    const farmId = params.id
+    const organizationId = await getOrganizationId(request)
+    const { id: farmId } = await params
 
     const farm = await prisma.farm.findFirst({
       where: {
@@ -55,12 +55,12 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const organizationId = getOrganizationId(request)
-    const userRole = getUserRole(request)
-    const farmId = params.id
+    const organizationId = await getOrganizationId(request)
+    const userRole = await getUserRole(request)
+    const { id: farmId } = await params
 
     // Only OWNER can update farms
     if (userRole !== "OWNER") {
@@ -127,12 +127,12 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const organizationId = getOrganizationId(request)
-    const userRole = getUserRole(request)
-    const farmId = params.id
+    const organizationId = await getOrganizationId(request)
+    const userRole = await getUserRole(request)
+    const { id: farmId } = await params
 
     // Only OWNER can delete farms
     if (userRole !== "OWNER") {

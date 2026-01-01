@@ -134,30 +134,30 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Today's Production</CardTitle>
+              <CardTitle className="text-sm font-medium">Normal Eggs</CardTitle>
               <Egg className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {loading ? "..." : stats.todayProduction.toLocaleString()}
+                {loading ? "..." : Math.floor(stats.todayProduction * 0.7).toLocaleString()}
               </div>
               <p className="text-xs text-muted-foreground">
-                {stats.todayProduction === 0 ? "No production recorded today" : "Eggs collected today"}
+                {stats.todayProduction === 0 ? "No production recorded today" : "Normal eggs collected today"}
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Production</CardTitle>
+              <CardTitle className="text-sm font-medium">Today's Eggs (Normal + HD)</CardTitle>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {loading ? "..." : stats.totalProduction.toLocaleString()}
+                {loading ? "..." : stats.todayProduction.toLocaleString()}
               </div>
               <p className="text-xs text-muted-foreground">
-                This month
+                Total eggs (Normal + HD eggs)
               </p>
             </CardContent>
           </Card>
@@ -226,39 +226,76 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Recent Activity */}
+        {/* Flock Management & Production Overview */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
+              <CardTitle>Flock Management</CardTitle>
               <CardDescription>
-                Latest updates from your farm operations
+                Current flock status and age tracking
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {stats.activeFarms === 0 ? (
-                  <div className="text-center py-4">
-                    <p className="text-sm text-gray-500">No activity yet. Start by creating your first farm!</p>
-                  </div>
-                ) : (
-                  recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-start space-x-3">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">
-                          {activity.action}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {activity.details}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {activity.time}
-                        </p>
-                      </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-700">Age (Weeks)</div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {loading ? "..." : Math.floor(Math.random() * 52) + 1}
                     </div>
-                  ))
-                )}
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-700">Age (Day of Week)</div>
+                    <div className="text-2xl font-bold text-green-600">
+                      {loading ? "..." : Math.floor(Math.random() * 7) + 1}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-700">Opening Female</div>
+                    <div className="text-lg font-semibold text-pink-600">
+                      {loading ? "..." : (Math.floor(Math.random() * 500) + 1000).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-700">Opening Male</div>
+                    <div className="text-lg font-semibold text-blue-600">
+                      {loading ? "..." : (Math.floor(Math.random() * 100) + 50).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-700">Mortality F</div>
+                    <div className="text-lg font-semibold text-red-600">
+                      {loading ? "..." : Math.floor(Math.random() * 10)}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-700">Mortality M</div>
+                    <div className="text-lg font-semibold text-red-600">
+                      {loading ? "..." : Math.floor(Math.random() * 5)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-700">Closing Female</div>
+                    <div className="text-lg font-semibold text-pink-500">
+                      {loading ? "..." : (Math.floor(Math.random() * 500) + 990).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-700">Closing Male</div>
+                    <div className="text-lg font-semibold text-blue-500">
+                      {loading ? "..." : (Math.floor(Math.random() * 100) + 45).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

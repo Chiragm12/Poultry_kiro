@@ -16,8 +16,15 @@ export interface ProductionTrend {
   date: string
   totalEggs: number
   sellableEggs: number
-  brokenEggs: number
-  damagedEggs: number
+  normalEggs: number
+  commEggs: number
+  waterEggs: number
+  jellyEggs: number
+  creakEggs: number
+  leakerEggs: number
+  wasteEggs: number // waterEggs + jellyEggs + creakEggs + leakerEggs
+  brokenEggs: number // Keep for backward compatibility
+  damagedEggs: number // Keep for backward compatibility
 }
 
 export interface ShedPerformance {
@@ -60,7 +67,12 @@ export class AnalyticsService {
           lte: endOfDay(new Date())
         }
       },
-      _sum: { sellableEggs: true }
+      _sum: { 
+        sellableEggs: true,
+        totalEggs: true,
+        normalEggs: true,
+        commEggs: true
+      }
     })
 
     // Get yesterday's production for trend
@@ -74,7 +86,10 @@ export class AnalyticsService {
           lt: today
         }
       },
-      _sum: { sellableEggs: true }
+      _sum: { 
+        sellableEggs: true,
+        totalEggs: true
+      }
     })
 
     // Get total production for the period
@@ -88,7 +103,16 @@ export class AnalyticsService {
           lte: endDate
         }
       },
-      _sum: { sellableEggs: true }
+      _sum: { 
+        sellableEggs: true,
+        totalEggs: true,
+        normalEggs: true,
+        commEggs: true,
+        waterEggs: true,
+        jellyEggs: true,
+        creakEggs: true,
+        leakerEggs: true
+      }
     })
 
     // Get farm and shed counts
@@ -179,6 +203,12 @@ export class AnalyticsService {
       _sum: {
         totalEggs: true,
         sellableEggs: true,
+        normalEggs: true,
+        commEggs: true,
+        waterEggs: true,
+        jellyEggs: true,
+        creakEggs: true,
+        leakerEggs: true,
         brokenEggs: true,
         damagedEggs: true
       },
@@ -187,13 +217,25 @@ export class AnalyticsService {
       }
     })
 
-    return productions.map(p => ({
-      date: format(p.date, 'yyyy-MM-dd'),
-      totalEggs: p._sum.totalEggs || 0,
-      sellableEggs: p._sum.sellableEggs || 0,
-      brokenEggs: p._sum.brokenEggs || 0,
-      damagedEggs: p._sum.damagedEggs || 0
-    }))
+    return productions.map(p => {
+      const wasteEggs = (p._sum.waterEggs || 0) + (p._sum.jellyEggs || 0) + 
+                       (p._sum.creakEggs || 0) + (p._sum.leakerEggs || 0)
+      
+      return {
+        date: format(p.date, 'yyyy-MM-dd'),
+        totalEggs: p._sum.totalEggs || 0,
+        sellableEggs: p._sum.sellableEggs || 0,
+        normalEggs: p._sum.normalEggs || 0,
+        commEggs: p._sum.commEggs || 0,
+        waterEggs: p._sum.waterEggs || 0,
+        jellyEggs: p._sum.jellyEggs || 0,
+        creakEggs: p._sum.creakEggs || 0,
+        leakerEggs: p._sum.leakerEggs || 0,
+        wasteEggs,
+        brokenEggs: p._sum.brokenEggs || 0,
+        damagedEggs: p._sum.damagedEggs || 0
+      }
+    })
   }
 
   async getShedPerformance(days: number = 30): Promise<ShedPerformance[]> {
@@ -220,7 +262,10 @@ export class AnalyticsService {
             }
           },
           select: {
-            sellableEggs: true
+            sellableEggs: true,
+            totalEggs: true,
+            normalEggs: true,
+            commEggs: true
           }
         }
       }
@@ -228,6 +273,7 @@ export class AnalyticsService {
 
     return shedStats.map(shed => {
       const totalProduction = shed.productions.reduce((sum, p) => sum + p.sellableEggs, 0)
+      const totalEggs = shed.productions.reduce((sum, p) => sum + p.totalEggs, 0)
       const averageDaily = shed.productions.length > 0 ? totalProduction / shed.productions.length : 0
       const efficiency = shed.capacity > 0 ? (averageDaily / shed.capacity) * 100 : 0
 
@@ -336,15 +382,18 @@ export class AnalyticsService {
         })
       }
 
-      // High damage rate alert
-      const damageRate = (latestProduction.brokenEggs + latestProduction.damagedEggs) / latestProduction.totalEggs
-      if (damageRate > 0.1) { // More than 10% damage
+      // High waste rate alert (using new egg categories)
+      const wasteEggs = (latestProduction.waterEggs || 0) + (latestProduction.jellyEggs || 0) + 
+                       (latestProduction.creakEggs || 0) + (latestProduction.leakerEggs || 0)
+      const wasteRate = latestProduction.totalEggs > 0 ? wasteEggs / latestProduction.totalEggs : 0
+      
+      if (wasteRate > 0.1) { // More than 10% waste
         alerts.push({
           type: 'high_damage' as const,
-          message: `${shed.name} has high egg damage rate (${Math.round(damageRate * 100)}%)`,
+          message: `${shed.name} has high egg waste rate (${Math.round(wasteRate * 100)}%) - check handling and storage`,
           shedId: shed.id,
           shedName: shed.name,
-          severity: damageRate > 0.15 ? 'high' as const : 'medium' as const
+          severity: wasteRate > 0.15 ? 'high' as const : 'medium' as const
         })
       }
 

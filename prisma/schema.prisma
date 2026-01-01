@@ -65,23 +65,33 @@ model Organization {
   users       User[]
   farms       Farm[]
   auditLogs   AuditLog[]
+  jobRoles    JobRole[]
 
   @@map("organizations")
 }
 
 model User {
   id             String    @id @default(cuid())
-  email          String    @unique
-  emailVerified  DateTime?
   name           String?
   image          String?
   hashedPassword String?
   role           String    @default("WORKER") // OWNER, MANAGER, WORKER
   isActive       Boolean   @default(true)
+  
+  // Personal Information
+  sex            String?   // M or F
   phone          String?
   phoneNumber    String?   // New field for consistency with API
   address        String?   // New field
   aadharNumber   String?   // New field for Indian Aadhar ID
+  referral       String?   // Referral information
+  alternateContact String? // Alternative contact number
+  supervisorId   String?   // Manager/Supervisor ID
+  notes          String?   // Notes/Others text area
+  
+  // Job Information
+  jobRoleId      String?   // Reference to JobRole
+  
   avatar         String?
   organizationId String
   createdAt      DateTime  @default(now())
@@ -98,6 +108,13 @@ model User {
   // Attendance relations
   attendanceRecords Attendance[]
   
+  // Job role relation
+  jobRole      JobRole?  @relation(fields: [jobRoleId], references: [id])
+  
+  // Supervisor relation
+  supervisor   User?     @relation("UserSupervisor", fields: [supervisorId], references: [id])
+  subordinates User[]    @relation("UserSupervisor")
+  
   // Settings relation
   settings UserSettings?
   
@@ -105,8 +122,28 @@ model User {
   auditLogs AuditLog[]
 
   @@index([organizationId])
-  @@index([email])
+  @@index([supervisorId])
+  @@index([jobRoleId])
   @@map("users")
+}
+
+model JobRole {
+  id             String   @id @default(cuid())
+  title          String   // Job title (e.g., "Cleaner", "Feeder", "Supervisor")
+  description    String?  // Job description
+  salary         Decimal  // Salary amount
+  salaryType     String   @default("MONTHLY") // HOURLY, DAILY, WEEKLY, MONTHLY, YEARLY
+  isActive       Boolean  @default(true)
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users        User[]
+
+  @@index([organizationId])
+  @@map("job_roles")
 }
 
 model Farm {
@@ -141,8 +178,11 @@ model Shed {
   updatedAt   DateTime @updatedAt
 
   // Relations
-  farm        Farm         @relation(fields: [farmId], references: [id], onDelete: Cascade)
-  productions Production[]
+  farm             Farm               @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  productions      Production[]
+  flockManagement  FlockManagement[]
+  mortalityRecords MortalityRecord[]
+  dispatchRecords  DispatchRecord[]
 
   @@index([farmId])
   @@map("sheds")
@@ -151,18 +191,25 @@ model Shed {
 model Production {
   id           String   @id @default(cuid())
   date         DateTime
-  totalEggs    Int
-  normalEggs   Int      @default(0)  // Good quality eggs for sale
-  commEggs     Int      @default(0)  // Commercial grade eggs
-  waterEggs    Int      @default(0)  // Water damaged eggs
-  jellyEggs    Int      @default(0)  // Jelly/soft shell eggs
-  creakEggs    Int      @default(0)  // Cracked eggs
+  
+  // New egg categorization system
+  tableEggs    Int      @default(0)  // Table eggs for consumption
+  hatchingEggs Int      @default(0)  // Hatching eggs (normal eggs)
+  crackedEggs  Int      @default(0)  // Cracked eggs
+  jumboEggs    Int      @default(0)  // Jumbo eggs
   leakerEggs   Int      @default(0)  // Leaking eggs
-  jumboEggs    Int      @default(0)  // Keep for backward compatibility
-  crackedEggs  Int      @default(0)  // Keep for backward compatibility
-  brokenEggs   Int      @default(0)  // Keep for backward compatibility
-  damagedEggs  Int      @default(0)  // Keep for backward compatibility
-  sellableEggs Int // Calculated: normalEggs + commEggs
+  totalEggs    Int                   // Sum of all above categories (HD eggs)
+  
+  // Legacy fields for backward compatibility
+  normalEggs   Int      @default(0)
+  commEggs     Int      @default(0)
+  waterEggs    Int      @default(0)
+  jellyEggs    Int      @default(0)
+  creakEggs    Int      @default(0)
+  brokenEggs   Int      @default(0)
+  damagedEggs  Int      @default(0)
+  sellableEggs Int      @default(0)
+  
   notes        String?
   shedId       String
   createdAt    DateTime @default(now())
@@ -170,11 +217,81 @@ model Production {
 
   // Relations
   shed Shed @relation(fields: [shedId], references: [id], onDelete: Cascade)
+  mortalityRecords MortalityRecord[]
+  dispatchRecords  DispatchRecord[]
 
   @@unique([shedId, date])
   @@index([shedId])
   @@index([date])
   @@map("productions")
+}
+
+model FlockManagement {
+  id             String   @id @default(cuid())
+  date           DateTime
+  ageWeeks       Int      // Age in weeks
+  ageDayOfWeek   Int      // Day of the week (1-7)
+  openingFemale  Int      // Opening female count
+  openingMale    Int      // Opening male count
+  mortalityF     Int      @default(0) // Female mortality
+  mortalityM     Int      @default(0) // Male mortality
+  closingFemale  Int      // Calculated: openingFemale - mortalityF
+  closingMale    Int      // Calculated: openingMale - mortalityM
+  shedId         String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  shed Shed @relation(fields: [shedId], references: [id], onDelete: Cascade)
+
+  @@unique([shedId, date])
+  @@index([shedId])
+  @@index([date])
+  @@map("flock_management")
+}
+
+model MortalityRecord {
+  id           String   @id @default(cuid())
+  date         DateTime
+  maleMortality   Int   @default(0)
+  femaleMortality Int   @default(0)
+  notes        String?
+  productionId String?
+  shedId       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  production Production? @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  shed       Shed        @relation(fields: [shedId], references: [id], onDelete: Cascade)
+
+  @@index([shedId])
+  @@index([date])
+  @@map("mortality_records")
+}
+
+model DispatchRecord {
+  id              String   @id @default(cuid())
+  date            DateTime
+  tableEggs       Int      @default(0) // Dispatched table eggs
+  hatchingEggs    Int      @default(0) // Dispatched hatching eggs
+  crackedEggs     Int      @default(0) // Dispatched cracked eggs
+  jumboEggs       Int      @default(0) // Dispatched jumbo eggs
+  leakerEggs      Int      @default(0) // Dispatched leaker eggs
+  totalDispatched Int                  // Sum of all dispatched eggs
+  notes           String?
+  productionId    String?
+  shedId          String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  production Production? @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  shed       Shed        @relation(fields: [shedId], references: [id], onDelete: Cascade)
+
+  @@index([shedId])
+  @@index([date])
+  @@map("dispatch_records")
 }
 
 model Attendance {

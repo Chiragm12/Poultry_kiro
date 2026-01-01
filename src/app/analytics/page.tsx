@@ -126,15 +126,44 @@ export default function AnalyticsPage() {
     )
   }
 
-  // Calculate egg quality data for pie chart
+  // Calculate egg quality data for pie chart with new categories
   const eggQualityData = data?.productionTrend.reduce(
     (acc, day) => ({
       sellableEggs: acc.sellableEggs + day.sellableEggs,
+      normalEggs: acc.normalEggs + day.normalEggs,
+      commEggs: acc.commEggs + day.commEggs,
+      waterEggs: acc.waterEggs + day.waterEggs,
+      jellyEggs: acc.jellyEggs + day.jellyEggs,
+      creakEggs: acc.creakEggs + day.creakEggs,
+      leakerEggs: acc.leakerEggs + day.leakerEggs,
+      wasteEggs: acc.wasteEggs + day.wasteEggs,
       brokenEggs: acc.brokenEggs + day.brokenEggs,
       damagedEggs: acc.damagedEggs + day.damagedEggs,
     }),
-    { sellableEggs: 0, brokenEggs: 0, damagedEggs: 0 }
-  ) || { sellableEggs: 0, brokenEggs: 0, damagedEggs: 0 }
+    { 
+      sellableEggs: 0, 
+      normalEggs: 0, 
+      commEggs: 0, 
+      waterEggs: 0, 
+      jellyEggs: 0, 
+      creakEggs: 0, 
+      leakerEggs: 0, 
+      wasteEggs: 0,
+      brokenEggs: 0, 
+      damagedEggs: 0 
+    }
+  ) || { 
+    sellableEggs: 0, 
+    normalEggs: 0, 
+    commEggs: 0, 
+    waterEggs: 0, 
+    jellyEggs: 0, 
+    creakEggs: 0, 
+    leakerEggs: 0, 
+    wasteEggs: 0,
+    brokenEggs: 0, 
+    damagedEggs: 0 
+  }
 
   return (
     <DashboardLayout>

@@ -5,11 +5,11 @@ import { createSuccessResponse, createErrorResponse, handleApiError, getOrganiza
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const organizationId = getOrganizationId(request)
-    const shedId = params.id
+    const organizationId = await getOrganizationId(request)
+    const { id: shedId } = await params
 
     const shed = await prisma.shed.findFirst({
       where: {
@@ -58,12 +58,12 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const organizationId = getOrganizationId(request)
-    const userRole = getUserRole(request)
-    const shedId = params.id
+    const organizationId = await getOrganizationId(request)
+    const userRole = await getUserRole(request)
+    const { id: shedId } = await params
 
     // Only OWNER and MANAGER can update sheds
     if (!["OWNER", "MANAGER"].includes(userRole)) {
@@ -134,12 +134,12 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const organizationId = getOrganizationId(request)
-    const userRole = getUserRole(request)
-    const shedId = params.id
+    const organizationId = await getOrganizationId(request)
+    const userRole = await getUserRole(request)
+    const { id: shedId } = await params
 
     // Only OWNER and MANAGER can delete sheds
     if (!["OWNER", "MANAGER"].includes(userRole)) {

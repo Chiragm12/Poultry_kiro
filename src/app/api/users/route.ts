@@ -32,12 +32,31 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         name: true,
-        email: true,
         role: true,
         isActive: true,
+        sex: true,
         phoneNumber: true,
         address: true,
         aadharNumber: true,
+        referral: true,
+        alternateContact: true,
+        notes: true,
+        supervisorId: true,
+        jobRoleId: true,
+        supervisor: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        jobRole: {
+          select: {
+            id: true,
+            title: true,
+            salary: true,
+            salaryType: true,
+          },
+        },
         createdAt: true,
         updatedAt: true,
       },
@@ -63,40 +82,77 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const validatedData = createUserSchema.parse(body)
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: validatedData.email },
-    })
+    const { 
+      name, 
+      role, 
+      password, 
+      sex, 
+      phoneNumber, 
+      address, 
+      aadharNumber, 
+      referral, 
+      alternateContact, 
+      supervisorId, 
+      jobRoleId, 
+      notes 
+    } = body
 
-    if (existingUser) {
-      return createErrorResponse("User with this email already exists", 400)
+    if (!name || !password) {
+      return createErrorResponse("Name and password are required", 400)
+    }
+
+    if (password.length < 6) {
+      return createErrorResponse("Password must be at least 6 characters long", 400)
     }
 
     // Hash password
-    const hashedPassword = await hashPassword(validatedData.password)
+    const hashedPassword = await hashPassword(password)
 
     const user = await prisma.user.create({
       data: {
-        name: validatedData.name,
-        email: validatedData.email,
+        name,
         hashedPassword,
-        role: validatedData.role,
-        phoneNumber: validatedData.phoneNumber || null,
-        address: validatedData.address || null,
-        aadharNumber: validatedData.aadharNumber || null,
+        role: role || "WORKER",
+        sex,
+        phoneNumber,
+        address,
+        aadharNumber,
+        referral,
+        alternateContact,
+        supervisorId,
+        jobRoleId,
+        notes,
         organizationId,
       },
       select: {
         id: true,
         name: true,
-        email: true,
         role: true,
         isActive: true,
+        sex: true,
         phoneNumber: true,
         address: true,
         aadharNumber: true,
+        referral: true,
+        alternateContact: true,
+        notes: true,
+        supervisorId: true,
+        jobRoleId: true,
+        supervisor: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        jobRole: {
+          select: {
+            id: true,
+            title: true,
+            salary: true,
+            salaryType: true,
+          },
+        },
         createdAt: true,
         updatedAt: true,
       },
