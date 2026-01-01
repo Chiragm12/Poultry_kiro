@@ -85,12 +85,11 @@ export async function POST(request: NextRequest) {
     
     // All authenticated users can create production records
     const body = await request.json()
-    const validatedData = createProductionSchema.parse(body)
-
+    
     // Verify shed exists and belongs to the organization
     const shed = await prisma.shed.findFirst({
       where: {
-        id: validatedData.shedId,
+        id: body.shedId,
         farm: {
           organizationId,
         },
@@ -105,8 +104,8 @@ export async function POST(request: NextRequest) {
     const existingProduction = await prisma.production.findUnique({
       where: {
         shedId_date: {
-          shedId: validatedData.shedId,
-          date: new Date(validatedData.date),
+          shedId: body.shedId,
+          date: new Date(body.date),
         },
       },
     })
@@ -115,39 +114,43 @@ export async function POST(request: NextRequest) {
       return createErrorResponse("Production record already exists for this shed and date", 400)
     }
 
-    // Calculate sellable eggs (normal + commercial eggs)
-    const normalEggs = validatedData.normalEggs || 0
-    const commEggs = validatedData.commEggs || 0
-    const waterEggs = validatedData.waterEggs || 0
-    const jellyEggs = validatedData.jellyEggs || 0
-    const creakEggs = validatedData.creakEggs || 0
-    const leakerEggs = validatedData.leakerEggs || 0
-    const sellableEggs = normalEggs + commEggs
+    // Handle new egg categorization system
+    const tableEggs = body.tableEggs || 0
+    const hatchingEggs = body.hatchingEggs || 0
+    const crackedEggs = body.crackedEggs || 0
+    const jumboEggs = body.jumboEggs || 0
+    const leakerEggs = body.leakerEggs || 0
+    const totalEggs = body.totalEggs || (tableEggs + hatchingEggs + crackedEggs + jumboEggs + leakerEggs)
 
-    // Handle backward compatibility
-    const jumboEggs = validatedData.jumboEggs || 0
-    const crackedEggs = validatedData.crackedEggs || creakEggs
-    const brokenEggs = validatedData.brokenEggs || creakEggs
-    const damagedEggs = validatedData.damagedEggs || jellyEggs
+    // Backward compatibility fields
+    const normalEggs = body.normalEggs || hatchingEggs
+    const commEggs = body.commEggs || tableEggs
+    const waterEggs = body.waterEggs || 0
+    const jellyEggs = body.jellyEggs || 0
+    const creakEggs = body.creakEggs || crackedEggs
+    const sellableEggs = normalEggs + commEggs
 
     const production = await prisma.production.create({
       data: {
-        date: new Date(validatedData.date),
-        totalEggs: validatedData.totalEggs,
+        date: new Date(body.date),
+        // New fields
+        tableEggs,
+        hatchingEggs,
+        crackedEggs,
+        jumboEggs,
+        leakerEggs,
+        totalEggs,
+        // Legacy fields for backward compatibility
         normalEggs,
         commEggs,
         waterEggs,
         jellyEggs,
         creakEggs,
-        leakerEggs,
         sellableEggs,
-        // Keep old fields for backward compatibility
-        jumboEggs,
-        crackedEggs,
-        brokenEggs,
-        damagedEggs,
-        notes: validatedData.notes,
-        shedId: validatedData.shedId,
+        brokenEggs: crackedEggs,
+        damagedEggs: leakerEggs,
+        notes: body.notes,
+        shedId: body.shedId,
       },
       include: {
         shed: {

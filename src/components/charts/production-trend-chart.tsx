@@ -8,8 +8,15 @@ interface ProductionTrendData {
   date: string
   totalEggs: number
   sellableEggs: number
-  brokenEggs: number
-  damagedEggs: number
+  normalEggs: number
+  commEggs: number
+  waterEggs: number
+  jellyEggs: number
+  creakEggs: number
+  leakerEggs: number
+  wasteEggs: number
+  brokenEggs: number // Keep for backward compatibility
+  damagedEggs: number // Keep for backward compatibility
 }
 
 interface ProductionTrendChartProps {
@@ -43,17 +50,55 @@ export default function ProductionTrendChart({
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      const data = payload[0]?.payload
       return (
         <div className="bg-white p-3 border rounded-lg shadow-lg">
           <p className="font-medium text-gray-900 mb-2">{formatTooltipDate(label)}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {entry.value.toLocaleString()} eggs
+          <div className="space-y-1">
+            <p className="text-sm text-blue-600">
+              Total Eggs: {data?.totalEggs?.toLocaleString() || 0}
             </p>
-          ))}
-          {payload.length > 0 && (
+            <p className="text-sm text-green-600">
+              Sellable: {data?.sellableEggs?.toLocaleString() || 0}
+            </p>
+            {data?.normalEggs > 0 && (
+              <p className="text-xs text-green-500 ml-2">
+                • Normal: {data.normalEggs.toLocaleString()}
+              </p>
+            )}
+            {data?.commEggs > 0 && (
+              <p className="text-xs text-blue-500 ml-2">
+                • Commercial: {data.commEggs.toLocaleString()}
+              </p>
+            )}
+            <p className="text-sm text-red-600">
+              Waste: {data?.wasteEggs?.toLocaleString() || 0}
+            </p>
+            {data?.waterEggs > 0 && (
+              <p className="text-xs text-cyan-500 ml-2">
+                • Water: {data.waterEggs.toLocaleString()}
+              </p>
+            )}
+            {data?.jellyEggs > 0 && (
+              <p className="text-xs text-amber-500 ml-2">
+                • Jelly: {data.jellyEggs.toLocaleString()}
+              </p>
+            )}
+            {data?.creakEggs > 0 && (
+              <p className="text-xs text-red-500 ml-2">
+                • Creak: {data.creakEggs.toLocaleString()}
+              </p>
+            )}
+            {data?.leakerEggs > 0 && (
+              <p className="text-xs text-red-600 ml-2">
+                • Leaker: {data.leakerEggs.toLocaleString()}
+              </p>
+            )}
+          </div>
+          {data?.totalEggs > 0 && (
             <div className="mt-2 pt-2 border-t text-xs text-gray-500">
-              <p>Loss Rate: {((payload[2]?.value + payload[3]?.value) / payload[0]?.value * 100).toFixed(1)}%</p>
+              <p>Efficiency: {((data.sellableEggs / data.totalEggs) * 100).toFixed(1)}%</p>
+              <p>Waste Rate: {((data.wasteEggs || 0) / data.totalEggs * 100).toFixed(1)}%</p>
             </div>
           )}
         </div>
@@ -98,21 +143,11 @@ export default function ProductionTrendChart({
             />
             <Line 
               type="monotone" 
-              dataKey="brokenEggs" 
-              stroke="#f59e0b" 
-              strokeWidth={1}
-              strokeDasharray="5 5"
-              name="Broken Eggs"
-              dot={{ r: 2 }}
-            />
-            <Line 
-              type="monotone" 
-              dataKey="damagedEggs" 
+              dataKey="wasteEggs" 
               stroke="#ef4444" 
-              strokeWidth={1}
-              strokeDasharray="5 5"
-              name="Damaged Eggs"
-              dot={{ r: 2 }}
+              strokeWidth={2}
+              name="Waste Eggs"
+              dot={{ r: 3 }}
             />
           </LineChart>
         </ResponsiveContainer>
