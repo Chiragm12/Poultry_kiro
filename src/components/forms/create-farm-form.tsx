@@ -27,6 +27,8 @@ type CreateFarmFormData = {
   location?: string
   description?: string
   managerId?: string
+  maleCount: number
+  femaleCount: number
 }
 
 export default function CreateFarmForm({ onSuccess }: CreateFarmFormProps) {
@@ -151,6 +153,38 @@ export default function CreateFarmForm({ onSuccess }: CreateFarmFormProps) {
         {errors.managerId && (
           <p className="text-sm text-red-600">{errors.managerId.message}</p>
         )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="maleCount">Male Birds</Label>
+          <Input
+            id="maleCount"
+            type="number"
+            min="0"
+            placeholder="0"
+            {...register("maleCount", { valueAsNumber: true })}
+            disabled={isLoading}
+          />
+          {errors.maleCount && (
+            <p className="text-sm text-red-600">{errors.maleCount.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="femaleCount">Female Birds</Label>
+          <Input
+            id="femaleCount"
+            type="number"
+            min="0"
+            placeholder="0"
+            {...register("femaleCount", { valueAsNumber: true })}
+            disabled={isLoading}
+          />
+          {errors.femaleCount && (
+            <p className="text-sm text-red-600">{errors.femaleCount.message}</p>
+          )}
+        </div>
       </div>
 
       <div className="flex justify-end space-x-2 pt-4">

@@ -20,7 +20,8 @@ import {
   Egg,
   AlertTriangle,
   CheckCircle,
-  Clock
+  Clock,
+  BarChart3
 } from "lucide-react"
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns"
 import { toast } from "sonner"
@@ -45,6 +46,8 @@ export default function ReportsPage() {
   const { data: session } = useSession()
   const [loading, setLoading] = useState(false)
   const [reportData, setReportData] = useState<any>(null)
+  const [weekStatus, setWeekStatus] = useState<any>(null)
+  const [weeklyProduction, setWeeklyProduction] = useState<any[]>([])
   const [farms, setFarms] = useState<Farm[]>([])
   const [sheds, setSheds] = useState<Shed[]>([])
   const [managers, setManagers] = useState<Manager[]>([])
@@ -61,6 +64,8 @@ export default function ReportsPage() {
 
   useEffect(() => {
     fetchFilters()
+    fetchWeekStatus()
+    fetchWeeklyProduction()
   }, [])
 
   useEffect(() => {
@@ -71,6 +76,30 @@ export default function ReportsPage() {
       setFilteredSheds(sheds)
     }
   }, [selectedFarm, sheds])
+
+  const fetchWeekStatus = async () => {
+    try {
+      const response = await fetch("/api/analytics/week-status")
+      if (response.ok) {
+        const result = await response.json()
+        setWeekStatus(result.data)
+      }
+    } catch (error) {
+      console.error("Error fetching week status:", error)
+    }
+  }
+
+  const fetchWeeklyProduction = async () => {
+    try {
+      const response = await fetch("/api/analytics/weekly-production")
+      if (response.ok) {
+        const result = await response.json()
+        setWeeklyProduction(result.data || [])
+      }
+    } catch (error) {
+      console.error("Error fetching weekly production:", error)
+    }
+  }
 
   const fetchFilters = async () => {
     try {
@@ -148,6 +177,14 @@ export default function ReportsPage() {
         throw new Error(result.error || "Failed to generate report")
       }
 
+      console.log("Report data received:", result.data)
+      if (result.data.production) {
+        console.log("Production data:", result.data.production)
+        if (result.data.production.productionDetails) {
+          console.log("Production details count:", result.data.production.productionDetails.length)
+        }
+      }
+
       setReportData(result.data)
       toast.success("Report generated successfully")
     } catch (error) {
@@ -219,84 +256,99 @@ export default function ReportsPage() {
       console.log("Converting data to CSV:", data)
       const lines: string[] = []
 
-      // Add metadata
-      lines.push(`Report Type,${data.metadata?.reportType || 'N/A'}`)
-      lines.push(`Organization,${data.metadata?.organizationName || 'N/A'}`)
-      lines.push(`Date Range,${data.metadata?.dateRange || 'N/A'}`)
-      lines.push(`Generated At,${data.metadata?.generatedAt || new Date().toISOString()}`)
-      lines.push('') // Empty line
+      // Add comprehensive production data header matching the image format
+      const headers = [
+        'Date',
+        'Age-Wk',
+        'Age-Day',
+        'Op Male',
+        'Op Female',
+        'Mortl Male',
+        'Mortl Female',
+        'Closing Male',
+        'Closing Female',
+        'Table Eggs',
+        'Hatching Eggs',
+        'Cracked Eggs',
+        'Jumbo Eggs',
+        'Leaker Eggs',
+        'Water Eggs',
+        'Total Daily Eggs',
+        'Incharge HE',
+        'Daily HE',
+        'Total Labors',
+        'Present Labors',
+        'Supervisors',
+        'Dep HE',
+        'HD%',
+        'HE%',
+        'Exp HD%',
+        'Exp HE%'
+      ]
 
-      // Add production summary
-      if (data.production && data.production.summary) {
-        console.log("Adding production summary")
-        lines.push('PRODUCTION SUMMARY')
-        lines.push('Metric,Value')
-        lines.push(`Total Eggs,${data.production.summary.totalEggs || 0}`)
-        lines.push(`Sellable Eggs,${data.production.summary.sellableEggs || 0}`)
-        lines.push(`Broken Eggs,${data.production.summary.brokenEggs || 0}`)
-        lines.push(`Damaged Eggs,${data.production.summary.damagedEggs || 0}`)
-        lines.push(`Loss Percentage,${(data.production.summary.lossPercentage || 0).toFixed(2)}%`)
-        lines.push(`Average Daily,${(data.production.summary.averageDaily || 0).toFixed(2)}`)
-        lines.push('') // Empty line
+      lines.push(headers.join(','))
 
-        // Add shed breakdown
-        if (data.production.shedBreakdown && Array.isArray(data.production.shedBreakdown) && data.production.shedBreakdown.length > 0) {
-          console.log("Adding shed breakdown")
-          lines.push('SHED PERFORMANCE')
-          lines.push('Shed Name,Farm Name,Total Eggs,Sellable Eggs,Broken Eggs,Damaged Eggs,Efficiency')
-          data.production.shedBreakdown.forEach((shed: any) => {
-            lines.push(`"${shed.shedName || 'Unknown'}","${shed.farmName || 'Unknown'}",${shed.totalEggs || 0},${shed.sellableEggs || 0},${shed.brokenEggs || 0},${shed.damagedEggs || 0},${(shed.efficiency || 0).toFixed(2)}%`)
-          })
-          lines.push('') // Empty line
+      // Get production records with additional data
+      if (data.production && data.production.productionDetails && Array.isArray(data.production.productionDetails)) {
+        console.log("Found production details:", data.production.productionDetails.length, "records")
+        data.production.productionDetails.forEach((record: any) => {
+          const row = [
+            record.date || '',
+            record.ageWeeks || '',
+            record.ageDays || '',
+            record.openingMale || 0,
+            record.openingFemale || 0,
+            record.mortalityMale || 0,
+            record.mortalityFemale || 0,
+            record.closingMale || 0,
+            record.closingFemale || 0,
+            record.tableEggs || 0,
+            record.hatchingEggs || 0,
+            record.crackedEggs || 0,
+            record.jumboEggs || 0,
+            record.leakerEggs || 0,
+            record.waterEggs || 0,
+            record.totalDailyEggs || 0,
+            record.inchargeHE || 0,
+            record.dailyHE || 0,
+            record.totalLabors || 0,
+            record.presentLabors || 0,
+            record.supervisors || 0,
+            record.depHE || 0,
+            record.hdPercentage || '',
+            record.hePercentage || '',
+            record.expHdPercentage || '',
+            record.expHePercentage || ''
+          ]
+          lines.push(row.join(','))
+        })
+      } else {
+        console.log("No production details found, checking data structure:", Object.keys(data))
+        if (data.production) {
+          console.log("Production keys:", Object.keys(data.production))
         }
-      }
+        
+        // Fallback: create sample data structure if no detailed data exists
+        lines.push('No detailed production data available for the selected date range')
+        lines.push('')
+        
+        // Add metadata
+        lines.push(`Report Type,${data.metadata?.reportType || 'N/A'}`)
+        lines.push(`Organization,${data.metadata?.organizationName || 'N/A'}`)
+        lines.push(`Date Range,${data.metadata?.dateRange || 'N/A'}`)
+        lines.push(`Generated At,${data.metadata?.generatedAt || new Date().toISOString()}`)
+        lines.push('')
 
-      // Add attendance summary
-      if (data.attendance && data.attendance.summary) {
-        console.log("Adding attendance summary")
-        lines.push('ATTENDANCE SUMMARY')
-        lines.push('Metric,Value')
-        lines.push(`Total Workers,${data.attendance.summary.totalWorkers || 0}`)
-        lines.push(`Average Attendance Rate,${(data.attendance.summary.averageAttendanceRate || 0).toFixed(2)}%`)
-        lines.push(`Total Present Days,${data.attendance.summary.totalPresentDays || 0}`)
-        lines.push(`Total Late Days,${data.attendance.summary.totalLateDays || 0}`)
-        lines.push(`Total Absent Days,${data.attendance.summary.totalAbsentDays || 0}`)
-        lines.push('') // Empty line
-
-        // Add worker breakdown
-        if (data.attendance.workerBreakdown && Array.isArray(data.attendance.workerBreakdown) && data.attendance.workerBreakdown.length > 0) {
-          console.log("Adding worker breakdown")
-          lines.push('WORKER PERFORMANCE')
-          lines.push('Worker Name,Total Days,Present Days,Late Days,Absent Days,Attendance Rate,Status')
-          data.attendance.workerBreakdown.forEach((worker: any) => {
-            lines.push(`"${worker.userName || 'Unknown'}",${worker.totalDays || 0},${worker.presentDays || 0},${worker.lateDays || 0},${worker.absentDays || 0},${(worker.attendanceRate || 0).toFixed(2)}%,${worker.status || 'Unknown'}`)
-          })
-          lines.push('') // Empty line
-        }
-      }
-
-      // Add insights
-      if (data.insights) {
-        console.log("Adding insights")
-        lines.push('INSIGHTS & RECOMMENDATIONS')
-
-        if (data.insights.productionTrends) {
-          lines.push('Production Trends')
-          lines.push(`"${data.insights.productionTrends.description || 'No data'}"`)
-          lines.push('')
-        }
-
-        if (data.insights.attendanceInsights) {
-          lines.push('Attendance Insights')
-          lines.push(`"${data.insights.attendanceInsights.description || 'No data'}"`)
-          lines.push('')
-        }
-
-        if (data.insights.recommendations && Array.isArray(data.insights.recommendations)) {
-          lines.push('Recommendations')
-          data.insights.recommendations.forEach((rec: string, index: number) => {
-            lines.push(`${index + 1},"${rec}"`)
-          })
+        // Add production summary if available
+        if (data.production && data.production.summary) {
+          lines.push('PRODUCTION SUMMARY')
+          lines.push('Metric,Value')
+          lines.push(`Total Eggs,${data.production.summary.totalEggs || 0}`)
+          lines.push(`Sellable Eggs,${data.production.summary.sellableEggs || 0}`)
+          lines.push(`Broken Eggs,${data.production.summary.brokenEggs || 0}`)
+          lines.push(`Damaged Eggs,${data.production.summary.damagedEggs || 0}`)
+          lines.push(`Loss Percentage,${(data.production.summary.lossPercentage || 0).toFixed(2)}%`)
+          lines.push(`Average Daily,${(data.production.summary.averageDaily || 0).toFixed(2)}`)
         }
       }
 
@@ -342,6 +394,123 @@ export default function ReportsPage() {
             </p>
           </div>
         </div>
+
+        {/* Week Tracking Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Calendar className="mr-2 h-5 w-5" />
+              Production Week Tracking
+            </CardTitle>
+            <CardDescription>
+              Current production cycle status and week progression
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-blue-50 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">
+                  {weekStatus?.currentWeek || 1}
+                </div>
+                <div className="text-sm font-medium text-blue-700">Current Week</div>
+                <div className="text-xs text-blue-600">Production Cycle</div>
+              </div>
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">
+                  {weekStatus?.dayOfWeek || 1}
+                </div>
+                <div className="text-sm font-medium text-green-700">Day of Week</div>
+                <div className="text-xs text-green-600">
+                  {weekStatus?.dayName || 'Monday'}
+                </div>
+              </div>
+              <div className="text-center p-4 bg-purple-50 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">
+                  {weekStatus?.totalDays || 1}
+                </div>
+                <div className="text-sm font-medium text-purple-700">Total Days</div>
+                <div className="text-xs text-purple-600">Since Start</div>
+              </div>
+              <div className="text-center p-4 bg-orange-50 rounded-lg">
+                <div className="text-2xl font-bold text-orange-600">
+                  {weekStatus?.weeksRemaining || 72}
+                </div>
+                <div className="text-sm font-medium text-orange-700">Weeks Left</div>
+                <div className="text-xs text-orange-600">Est. Cycle End</div>
+              </div>
+            </div>
+            
+            {weekStatus?.cycleName && (
+              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                <div className="text-sm font-medium text-gray-700">Active Production Cycle</div>
+                <div className="text-lg font-semibold text-gray-900">{weekStatus.cycleName}</div>
+                {weekStatus.cycleStartDate && (
+                  <div className="text-xs text-gray-500">
+                    Started: {format(new Date(weekStatus.cycleStartDate), 'MMM dd, yyyy')}
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Weekly Production Summary */}
+        {weeklyProduction.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BarChart3 className="mr-2 h-5 w-5" />
+                Weekly Production Summary
+              </CardTitle>
+              <CardDescription>
+                Production performance by week (last 8 weeks)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {weeklyProduction.slice(0, 8).map((week) => (
+                  <div key={week.week} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center space-x-4">
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-gray-900">Week {week.week}</div>
+                        <div className="text-xs text-gray-500">
+                          {format(new Date(week.startDate), 'MMM dd')} - {format(new Date(week.endDate), 'MMM dd')}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-sm font-medium text-gray-700">Days Recorded</div>
+                        <div className="text-lg font-semibold text-blue-600">{week.daysRecorded}/7</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-6">
+                      <div className="text-center">
+                        <div className="text-sm font-medium text-gray-700">Total Eggs</div>
+                        <div className="text-lg font-semibold text-green-600">
+                          {week.totalEggs.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-sm font-medium text-gray-700">Daily Avg</div>
+                        <div className="text-lg font-semibold text-purple-600">
+                          {Math.round(week.averageDaily).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-sm font-medium text-gray-700">Efficiency</div>
+                        <div className="text-lg font-semibold text-orange-600">
+                          {week.efficiency.toFixed(1)}%
+                        </div>
+                      </div>
+                      <Badge variant={week.efficiency >= 90 ? 'default' : week.efficiency >= 80 ? 'secondary' : 'destructive'}>
+                        {week.efficiency >= 90 ? 'Excellent' : week.efficiency >= 80 ? 'Good' : 'Needs Attention'}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Report Configuration */}
@@ -560,23 +729,22 @@ export default function ReportsPage() {
                         </div>
                       </div>
 
-                      {reportData.production.shedBreakdown && reportData.production.shedBreakdown.length > 0 && (
+                      {reportData.production.farmBreakdown && reportData.production.farmBreakdown.length > 0 && (
                         <div>
-                          <h4 className="font-medium mb-3">Top Performing Sheds</h4>
+                          <h4 className="font-medium mb-3">Top Performing Farms</h4>
                           <div className="space-y-2">
-                            {reportData.production.shedBreakdown
+                            {reportData.production.farmBreakdown
                               .sort((a: any, b: any) => (b.efficiency || 0) - (a.efficiency || 0))
                               .slice(0, 5)
-                              .map((shed: any, index: number) => (
-                                <div key={shed.shedId || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              .map((farm: any, index: number) => (
+                                <div key={farm.farmId || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                                   <div>
-                                    <div className="font-medium">{shed.shedName || 'Unknown'}</div>
-                                    <div className="text-sm text-gray-500">{shed.farmName || 'Unknown'}</div>
+                                    <div className="font-medium">{farm.farmName || 'Unknown'}</div>
                                   </div>
                                   <div className="text-right">
-                                    <div className="font-medium">{(shed.efficiency || 0).toFixed(1)}%</div>
+                                    <div className="font-medium">{(farm.efficiency || 0).toFixed(1)}%</div>
                                     <div className="text-sm text-gray-500">
-                                      {(shed.sellableEggs || 0).toLocaleString()} eggs
+                                      {(farm.sellableEggs || 0).toLocaleString()} eggs
                                     </div>
                                   </div>
                                 </div>

@@ -7,7 +7,6 @@ export async function GET(request: NextRequest) {
   try {
     const organizationId = await getOrganizationId(request)
     const { searchParams } = new URL(request.url)
-    const shedId = searchParams.get("shedId")
     const farmId = searchParams.get("farmId")
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
@@ -15,19 +14,13 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20")
 
     const whereClause: any = {
-      shed: {
-        farm: {
-          organizationId,
-        },
+      farm: {
+        organizationId,
       },
     }
 
-    if (shedId) {
-      whereClause.shedId = shedId
-    }
-
     if (farmId) {
-      whereClause.shed.farmId = farmId
+      whereClause.farmId = farmId
     }
 
     if (startDate && endDate) {
@@ -41,17 +34,11 @@ export async function GET(request: NextRequest) {
       prisma.production.findMany({
         where: whereClause,
         include: {
-          shed: {
+          farm: {
             select: {
               id: true,
               name: true,
-              capacity: true,
-              farm: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
+              location: true,
             },
           },
         },
@@ -86,32 +73,34 @@ export async function POST(request: NextRequest) {
     // All authenticated users can create production records
     const body = await request.json()
     
-    // Verify shed exists and belongs to the organization
-    const shed = await prisma.shed.findFirst({
+    if (!body.farmId) {
+      return createErrorResponse("Farm ID is required", 400)
+    }
+    
+    // Verify farm exists and belongs to the organization
+    const farm = await prisma.farm.findFirst({
       where: {
-        id: body.shedId,
-        farm: {
-          organizationId,
-        },
+        id: body.farmId,
+        organizationId,
       },
     })
 
-    if (!shed) {
-      return createErrorResponse("Shed not found", 404)
+    if (!farm) {
+      return createErrorResponse("Farm not found", 404)
     }
 
-    // Check if production record already exists for this shed and date
+    // Check if production record already exists for this farm and date
     const existingProduction = await prisma.production.findUnique({
       where: {
-        shedId_date: {
-          shedId: body.shedId,
+        farmId_date: {
+          farmId: body.farmId,
           date: new Date(body.date),
         },
       },
     })
 
     if (existingProduction) {
-      return createErrorResponse("Production record already exists for this shed and date", 400)
+      return createErrorResponse("Production record already exists for this farm and date", 400)
     }
 
     // Handle new egg categorization system
@@ -120,6 +109,7 @@ export async function POST(request: NextRequest) {
     const crackedEggs = body.crackedEggs || 0
     const jumboEggs = body.jumboEggs || 0
     const leakerEggs = body.leakerEggs || 0
+    const inchargeEggs = body.inchargeEggs || 0
     const totalEggs = body.totalEggs || (tableEggs + hatchingEggs + crackedEggs + jumboEggs + leakerEggs)
 
     // Backward compatibility fields
@@ -140,6 +130,7 @@ export async function POST(request: NextRequest) {
         jumboEggs,
         leakerEggs,
         totalEggs,
+        inchargeEggs,
         // Legacy fields for backward compatibility
         normalEggs,
         commEggs,
@@ -150,20 +141,14 @@ export async function POST(request: NextRequest) {
         brokenEggs: crackedEggs,
         damagedEggs: leakerEggs,
         notes: body.notes,
-        shedId: body.shedId,
+        farmId: body.farmId,
       },
       include: {
-        shed: {
+        farm: {
           select: {
             id: true,
             name: true,
-            capacity: true,
-            farm: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            location: true,
           },
         },
       },

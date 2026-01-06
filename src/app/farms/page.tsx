@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
-import { Plus, Building2, Users, Warehouse, MoreHorizontal, Edit, Trash2 } from "lucide-react"
+import { Plus, Building2, Users, MoreHorizontal, Edit, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -20,6 +20,8 @@ interface Farm {
   location?: string
   description?: string
   isActive: boolean
+  maleCount?: number
+  femaleCount?: number
   manager?: {
     id: string
     name: string
@@ -218,7 +220,6 @@ export default function FarmsPage() {
                           <DropdownMenuItem
                             onClick={() => handleDelete(farm)}
                             className="text-red-600"
-                            disabled={farm._count.sheds > 0}
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete
@@ -236,11 +237,11 @@ export default function FarmsPage() {
                     
                     <div className="flex items-center justify-between text-sm">
                       <div className="flex items-center text-gray-500">
-                        <Warehouse className="mr-1 h-4 w-4" />
-                        {farm._count.sheds} sheds
+                        <Users className="mr-1 h-4 w-4" />
+                        Total Birds: {(farm.maleCount || 0) + (farm.femaleCount || 0)}
                       </div>
                       <div className="text-gray-500">
-                        Total capacity: {farm.sheds.reduce((sum, shed) => sum + shed.capacity, 0)}
+                        M: {farm.maleCount || 0} | F: {farm.femaleCount || 0}
                       </div>
                     </div>
 

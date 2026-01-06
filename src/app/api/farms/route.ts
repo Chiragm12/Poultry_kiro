@@ -11,12 +11,20 @@ export async function GET(request: NextRequest) {
       where: {
         organizationId,
       },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        location: true,
+        description: true,
+        isActive: true,
+        maleCount: true,
+        femaleCount: true,
+        createdAt: true,
+        updatedAt: true,
         manager: {
           select: {
             id: true,
             name: true,
-            email: true,
           },
         },
         sheds: {
@@ -54,6 +62,15 @@ export async function POST(request: NextRequest) {
       return createErrorResponse("Insufficient permissions", 403)
     }
 
+    // Verify organization exists
+    const organization = await prisma.organization.findUnique({
+      where: { id: organizationId }
+    })
+
+    if (!organization) {
+      return createErrorResponse("Organization not found", 400)
+    }
+
     const body = await request.json()
     const validatedData = createFarmSchema.parse(body)
 
@@ -83,7 +100,6 @@ export async function POST(request: NextRequest) {
           select: {
             id: true,
             name: true,
-            email: true,
           },
         },
         _count: {

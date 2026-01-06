@@ -20,6 +20,8 @@ interface EditFarmFormProps {
     location?: string
     description?: string
     isActive: boolean
+    maleCount?: number
+    femaleCount?: number
     manager?: {
       id: string
       name: string
@@ -41,6 +43,8 @@ type EditFarmFormData = {
   description?: string
   managerId?: string
   isActive?: boolean
+  maleCount?: number
+  femaleCount?: number
 }
 
 export default function EditFarmForm({ farm, onSuccess }: EditFarmFormProps) {
@@ -62,6 +66,8 @@ export default function EditFarmForm({ farm, onSuccess }: EditFarmFormProps) {
       description: farm.description || "",
       managerId: farm.manager?.id || "",
       isActive: farm.isActive,
+      maleCount: farm.maleCount || 0,
+      femaleCount: farm.femaleCount || 0,
     },
   })
 
@@ -181,6 +187,38 @@ export default function EditFarmForm({ farm, onSuccess }: EditFarmFormProps) {
         {errors.managerId && (
           <p className="text-sm text-red-600">{errors.managerId.message}</p>
         )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="maleCount">Male Birds</Label>
+          <Input
+            id="maleCount"
+            type="number"
+            min="0"
+            placeholder="0"
+            {...register("maleCount", { valueAsNumber: true })}
+            disabled={isLoading}
+          />
+          {errors.maleCount && (
+            <p className="text-sm text-red-600">{errors.maleCount.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="femaleCount">Female Birds</Label>
+          <Input
+            id="femaleCount"
+            type="number"
+            min="0"
+            placeholder="0"
+            {...register("femaleCount", { valueAsNumber: true })}
+            disabled={isLoading}
+          />
+          {errors.femaleCount && (
+            <p className="text-sm text-red-600">{errors.femaleCount.message}</p>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center space-x-2">

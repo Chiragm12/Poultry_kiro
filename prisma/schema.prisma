@@ -49,6 +49,28 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
+model ProductionCycle {
+  id             String   @id @default(cuid())
+  name           String   // Cycle name (e.g., "Batch 2024-01")
+  startDate      DateTime // When the production cycle started
+  startWeek      Int      @default(1) // Starting week number
+  expectedEndWeek Int     @default(72) // Expected end week (typical laying cycle)
+  isActive       Boolean  @default(true)
+  farmId         String
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  farm         Farm         @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([farmId, isActive]) // Only one active cycle per farm
+  @@index([farmId])
+  @@index([organizationId])
+  @@map("production_cycles")
+}
+
 model Organization {
   id          String   @id @default(cuid())
   name        String
@@ -66,6 +88,7 @@ model Organization {
   farms       Farm[]
   auditLogs   AuditLog[]
   jobRoles    JobRole[]
+  productionCycles ProductionCycle[]
 
   @@map("organizations")
 }
@@ -73,6 +96,7 @@ model Organization {
 model User {
   id             String    @id @default(cuid())
   name           String?
+  email          String?   @unique
   image          String?
   hashedPassword String?
   role           String    @default("WORKER") // OWNER, MANAGER, WORKER
@@ -152,6 +176,11 @@ model Farm {
   location       String?
   description    String?
   isActive       Boolean  @default(true)
+  
+  // Bird counts
+  maleCount      Int      @default(0)
+  femaleCount    Int      @default(0)
+  
   organizationId String
   managerId      String?
   createdAt      DateTime @default(now())
@@ -161,6 +190,11 @@ model Farm {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   manager      User?        @relation("FarmManager", fields: [managerId], references: [id])
   sheds        Shed[]
+  productions  Production[]
+  mortalityRecords MortalityRecord[]
+  dispatchRecords  DispatchRecord[]
+  flockManagement  FlockManagement[]
+  productionCycles ProductionCycle[]
 
   @@index([organizationId])
   @@index([managerId])
@@ -179,10 +213,6 @@ model Shed {
 
   // Relations
   farm             Farm               @relation(fields: [farmId], references: [id], onDelete: Cascade)
-  productions      Production[]
-  flockManagement  FlockManagement[]
-  mortalityRecords MortalityRecord[]
-  dispatchRecords  DispatchRecord[]
 
   @@index([farmId])
   @@map("sheds")
@@ -199,6 +229,7 @@ model Production {
   jumboEggs    Int      @default(0)  // Jumbo eggs
   leakerEggs   Int      @default(0)  // Leaking eggs
   totalEggs    Int                   // Sum of all above categories (HD eggs)
+  inchargeEggs Int      @default(0)  // Incharge eggs (total HD eggs + extra eggs)
   
   // Legacy fields for backward compatibility
   normalEggs   Int      @default(0)
@@ -211,17 +242,17 @@ model Production {
   sellableEggs Int      @default(0)
   
   notes        String?
-  shedId       String
+  farmId       String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   // Relations
-  shed Shed @relation(fields: [shedId], references: [id], onDelete: Cascade)
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
   mortalityRecords MortalityRecord[]
   dispatchRecords  DispatchRecord[]
 
-  @@unique([shedId, date])
-  @@index([shedId])
+  @@unique([farmId, date])
+  @@index([farmId])
   @@index([date])
   @@map("productions")
 }
@@ -237,15 +268,15 @@ model FlockManagement {
   mortalityM     Int      @default(0) // Male mortality
   closingFemale  Int      // Calculated: openingFemale - mortalityF
   closingMale    Int      // Calculated: openingMale - mortalityM
-  shedId         String
+  farmId         String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   // Relations
-  shed Shed @relation(fields: [shedId], references: [id], onDelete: Cascade)
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
 
-  @@unique([shedId, date])
-  @@index([shedId])
+  @@unique([farmId, date])
+  @@index([farmId])
   @@index([date])
   @@map("flock_management")
 }
@@ -257,15 +288,15 @@ model MortalityRecord {
   femaleMortality Int   @default(0)
   notes        String?
   productionId String?
-  shedId       String
+  farmId       String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   // Relations
   production Production? @relation(fields: [productionId], references: [id], onDelete: Cascade)
-  shed       Shed        @relation(fields: [shedId], references: [id], onDelete: Cascade)
+  farm       Farm        @relation(fields: [farmId], references: [id], onDelete: Cascade)
 
-  @@index([shedId])
+  @@index([farmId])
   @@index([date])
   @@map("mortality_records")
 }
@@ -281,15 +312,15 @@ model DispatchRecord {
   totalDispatched Int                  // Sum of all dispatched eggs
   notes           String?
   productionId    String?
-  shedId          String
+  farmId          String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   // Relations
   production Production? @relation(fields: [productionId], references: [id], onDelete: Cascade)
-  shed       Shed        @relation(fields: [shedId], references: [id], onDelete: Cascade)
+  farm       Farm        @relation(fields: [farmId], references: [id], onDelete: Cascade)
 
-  @@index([shedId])
+  @@index([farmId])
   @@index([date])
   @@map("dispatch_records")
 }
