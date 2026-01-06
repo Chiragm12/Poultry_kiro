@@ -72,6 +72,8 @@ export const createFarmSchema = z.object({
   location: z.string().optional(),
   description: z.string().optional(),
   managerId: z.string().optional(),
+  maleCount: z.number().min(0, "Male count cannot be negative").default(0),
+  femaleCount: z.number().min(0, "Female count cannot be negative").default(0),
 })
 
 export const updateFarmSchema = z.object({
@@ -80,6 +82,8 @@ export const updateFarmSchema = z.object({
   description: z.string().optional(),
   managerId: z.string().optional(),
   isActive: z.boolean().optional(),
+  maleCount: z.number().min(0, "Male count cannot be negative").optional(),
+  femaleCount: z.number().min(0, "Female count cannot be negative").optional(),
 })
 
 // Shed management schemas

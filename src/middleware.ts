@@ -62,9 +62,15 @@ export async function middleware(request: NextRequest) {
 
     // Add organization context to the request headers for multi-tenant filtering
     const requestHeaders = new Headers(request.headers)
-    requestHeaders.set("x-organization-id", token.organizationId as string)
-    requestHeaders.set("x-user-id", token.sub as string)
-    requestHeaders.set("x-user-role", token.role as string)
+    if (token.organizationId) {
+      requestHeaders.set("x-organization-id", token.organizationId as string)
+    }
+    if (token.sub) {
+      requestHeaders.set("x-user-id", token.sub as string)
+    }
+    if (token.role) {
+      requestHeaders.set("x-user-role", token.role as string)
+    }
 
     return NextResponse.next({
       request: {

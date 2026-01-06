@@ -14,7 +14,6 @@ import {
   Menu, 
   Home, 
   Building2, 
-  Warehouse, 
   Egg, 
   Users, 
   Calendar, 
@@ -32,8 +31,8 @@ interface DashboardLayoutProps {
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home, roles: ["OWNER", "MANAGER", "WORKER"] },
   { name: "Farms", href: "/farms", icon: Building2, roles: ["OWNER", "MANAGER"] },
-  { name: "Sheds", href: "/sheds", icon: Warehouse, roles: ["OWNER", "MANAGER"] },
   { name: "Production", href: "/production", icon: Egg, roles: ["OWNER", "MANAGER", "WORKER"] },
+  { name: "Production Cycles", href: "/production-cycles", icon: BarChart3, roles: ["OWNER", "MANAGER"] },
   { name: "Attendance", href: "/attendance", icon: Calendar, roles: ["OWNER", "MANAGER", "WORKER"] },
   { name: "Analytics", href: "/analytics", icon: BarChart3, roles: ["OWNER", "MANAGER"] },
   { name: "Reports", href: "/reports", icon: FileText, roles: ["OWNER", "MANAGER"] },

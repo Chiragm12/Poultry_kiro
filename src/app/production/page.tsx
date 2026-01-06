@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Egg, Calendar, Edit, Trash2, AlertTriangle, Users, TrendingDown, Package, BarChart3, TrendingUp } from "lucide-react"
+import { Plus, Egg, Calendar, Edit, Trash2, AlertTriangle, Users, TrendingDown, Package, BarChart3, TrendingUp, Download } from "lucide-react"
 import { toast } from "sonner"
 import DashboardLayout from "@/components/layout/dashboard-layout"
 
@@ -24,13 +24,12 @@ interface Production {
   jumboEggs: number
   leakerEggs: number
   totalEggs: number
+  inchargeEggs: number
   notes?: string
-  shed: {
+  farm: {
     id: string
     name: string
-    farm: {
-      name: string
-    }
+    location: string
   }
   createdAt: string
 }
@@ -41,7 +40,12 @@ interface MortalityRecord {
   maleMortality: number
   femaleMortality: number
   notes?: string
-  shedId: string
+  farmId: string
+  farm?: {
+    id: string
+    name: string
+    location: string
+  }
 }
 
 interface DispatchRecord {
@@ -54,7 +58,12 @@ interface DispatchRecord {
   leakerEggs: number
   totalDispatched: number
   notes?: string
-  shedId: string
+  farmId: string
+  farm?: {
+    id: string
+    name: string
+    location: string
+  }
 }
 
 interface FlockData {
@@ -68,16 +77,16 @@ interface FlockData {
   mortalityM: number
   closingFemale: number
   closingMale: number
-  shedId: string
+  farmId: string
 }
 
-interface Shed {
+
+interface Farm {
   id: string
   name: string
-  farm: {
-    id: string
-    name: string
-  }
+  location: string
+  maleCount?: number
+  femaleCount?: number
 }
 
 export default function ProductionPage() {
@@ -85,7 +94,7 @@ export default function ProductionPage() {
   const [mortalityRecords, setMortalityRecords] = useState<MortalityRecord[]>([])
   const [dispatchRecords, setDispatchRecords] = useState<DispatchRecord[]>([])
   const [flockData, setFlockData] = useState<FlockData[]>([])
-  const [sheds, setSheds] = useState<Shed[]>([])
+  const [farms, setFarms] = useState<Farm[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("production")
 
@@ -93,22 +102,25 @@ export default function ProductionPage() {
   const [isProductionDialogOpen, setIsProductionDialogOpen] = useState(false)
   const [isMortalityDialogOpen, setIsMortalityDialogOpen] = useState(false)
   const [isDispatchDialogOpen, setIsDispatchDialogOpen] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [editingProductionId, setEditingProductionId] = useState<string | null>(null)
 
   // Form data states
   const [productionForm, setProductionForm] = useState({
     date: new Date().toISOString().split('T')[0],
-    shedId: "",
+    farmId: "",
     tableEggs: "",
     hatchingEggs: "",
     crackedEggs: "",
     jumboEggs: "",
     leakerEggs: "",
+    inchargeEggs: "",
     notes: "",
   })
 
   const [mortalityForm, setMortalityForm] = useState({
     date: new Date().toISOString().split('T')[0],
-    shedId: "",
+    farmId: "",
     maleMortality: "",
     femaleMortality: "",
     notes: "",
@@ -116,7 +128,7 @@ export default function ProductionPage() {
 
   const [dispatchForm, setDispatchForm] = useState({
     date: new Date().toISOString().split('T')[0],
-    shedId: "",
+    farmId: "",
     tableEggs: "",
     hatchingEggs: "",
     crackedEggs: "",
@@ -134,7 +146,7 @@ export default function ProductionPage() {
     try {
       await Promise.all([
         fetchProductions(),
-        fetchSheds(),
+        fetchFarms(),
         fetchMortalityRecords(),
         fetchDispatchRecords(),
         fetchFlockData()
@@ -160,17 +172,17 @@ export default function ProductionPage() {
     }
   }
 
-  const fetchSheds = async () => {
+  const fetchFarms = async () => {
     try {
-      const response = await fetch("/api/sheds")
+      const response = await fetch("/api/farms")
       if (response.ok) {
         const result = await response.json()
         if (result.success && result.data) {
-          setSheds(result.data)
+          setFarms(result.data)
         }
       }
     } catch (error) {
-      console.error("Error fetching sheds:", error)
+      console.error("Error fetching farms:", error)
     }
   }
 
@@ -180,11 +192,18 @@ export default function ProductionPage() {
       if (response.ok) {
         const result = await response.json()
         if (result.success && result.data) {
-          setMortalityRecords(result.data)
+          setMortalityRecords(Array.isArray(result.data) ? result.data : [])
+        } else {
+          console.error("Invalid mortality data format:", result)
+          setMortalityRecords([])
         }
+      } else {
+        console.error("Failed to fetch mortality records:", response.status)
+        setMortalityRecords([])
       }
     } catch (error) {
       console.error("Error fetching mortality records:", error)
+      setMortalityRecords([])
     }
   }
 
@@ -194,11 +213,18 @@ export default function ProductionPage() {
       if (response.ok) {
         const result = await response.json()
         if (result.success && result.data) {
-          setDispatchRecords(result.data)
+          setDispatchRecords(Array.isArray(result.data) ? result.data : [])
+        } else {
+          console.error("Invalid dispatch data format:", result)
+          setDispatchRecords([])
         }
+      } else {
+        console.error("Failed to fetch dispatch records:", response.status)
+        setDispatchRecords([])
       }
     } catch (error) {
       console.error("Error fetching dispatch records:", error)
+      setDispatchRecords([])
     }
   }
 
@@ -227,9 +253,9 @@ export default function ProductionPage() {
 
   const handleProductionSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!productionForm.shedId) {
-      toast.error("Please select a shed")
+
+    if (!productionForm.farmId) {
+      toast.error("Please select a farm")
       return
     }
 
@@ -240,8 +266,11 @@ export default function ProductionPage() {
     }
 
     try {
-      const response = await fetch("/api/production", {
-        method: "POST",
+      const url = isEditMode ? `/api/production/${editingProductionId}` : "/api/production"
+      const method = isEditMode ? "PUT" : "POST"
+
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...productionForm,
@@ -250,39 +279,87 @@ export default function ProductionPage() {
           crackedEggs: parseInt(productionForm.crackedEggs) || 0,
           jumboEggs: parseInt(productionForm.jumboEggs) || 0,
           leakerEggs: parseInt(productionForm.leakerEggs) || 0,
+          inchargeEggs: parseInt(productionForm.inchargeEggs) || 0,
           totalEggs,
         }),
       })
 
       if (response.ok) {
-        toast.success("Production recorded successfully")
+        toast.success(isEditMode ? "Production updated successfully" : "Production recorded successfully")
         setIsProductionDialogOpen(false)
-        setProductionForm({
-          date: new Date().toISOString().split('T')[0],
-          shedId: "",
-          tableEggs: "",
-          hatchingEggs: "",
-          crackedEggs: "",
-          jumboEggs: "",
-          leakerEggs: "",
-          notes: "",
-        })
+        resetProductionForm()
         fetchProductions()
       } else {
         const error = await response.json()
-        toast.error(error.error || "Failed to record production")
+        toast.error(error.error || `Failed to ${isEditMode ? 'update' : 'record'} production`)
       }
     } catch (error) {
-      console.error("Error recording production:", error)
-      toast.error("Error recording production")
+      console.error("Error with production:", error)
+      toast.error(`Error ${isEditMode ? 'updating' : 'recording'} production`)
+    }
+  }
+
+  const resetProductionForm = () => {
+    setProductionForm({
+      date: new Date().toISOString().split('T')[0],
+      farmId: "",
+      tableEggs: "",
+      hatchingEggs: "",
+      crackedEggs: "",
+      jumboEggs: "",
+      leakerEggs: "",
+      inchargeEggs: "",
+      notes: "",
+    })
+    setIsEditMode(false)
+    setEditingProductionId(null)
+  }
+
+  const handleEditProduction = (production: Production) => {
+    setProductionForm({
+      date: new Date(production.date).toISOString().split('T')[0],
+      farmId: production.farm.id,
+      tableEggs: production.tableEggs.toString(),
+      hatchingEggs: production.hatchingEggs.toString(),
+      crackedEggs: production.crackedEggs.toString(),
+      jumboEggs: production.jumboEggs.toString(),
+      leakerEggs: production.leakerEggs.toString(),
+      inchargeEggs: (production as any).inchargeEggs?.toString() || "0",
+      notes: production.notes || "",
+    })
+    setIsEditMode(true)
+    setEditingProductionId(production.id)
+    setIsProductionDialogOpen(true)
+  }
+
+  const handleDeleteProduction = async (productionId: string) => {
+    if (!confirm("Are you sure you want to delete this production record?")) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/production/${productionId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        toast.success("Production record deleted successfully")
+        fetchProductions()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Failed to delete production record")
+      }
+    } catch (error) {
+      console.error("Error deleting production:", error)
+      toast.error("Error deleting production record")
     }
   }
 
   const handleMortalitySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!mortalityForm.shedId) {
-      toast.error("Please select a shed")
+
+    if (!mortalityForm.farmId) {
+      toast.error("Please select a farm")
       return
     }
 
@@ -308,12 +385,15 @@ export default function ProductionPage() {
         setIsMortalityDialogOpen(false)
         setMortalityForm({
           date: new Date().toISOString().split('T')[0],
-          shedId: "",
+          farmId: "",
           maleMortality: "",
           femaleMortality: "",
           notes: "",
         })
-        fetchMortalityRecords()
+        // Refresh all data to ensure consistency
+        await fetchMortalityRecords()
+        await fetchFarms() // Refresh farms to get updated counts
+        await fetchFlockData()
       } else {
         const error = await response.json()
         toast.error(error.error || "Failed to record mortality")
@@ -326,9 +406,9 @@ export default function ProductionPage() {
 
   const handleDispatchSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!dispatchForm.shedId) {
-      toast.error("Please select a shed")
+
+    if (!dispatchForm.farmId) {
+      toast.error("Please select a farm")
       return
     }
 
@@ -357,7 +437,7 @@ export default function ProductionPage() {
         setIsDispatchDialogOpen(false)
         setDispatchForm({
           date: new Date().toISOString().split('T')[0],
-          shedId: "",
+          farmId: "",
           tableEggs: "",
           hatchingEggs: "",
           crackedEggs: "",
@@ -365,7 +445,9 @@ export default function ProductionPage() {
           leakerEggs: "",
           notes: "",
         })
-        fetchDispatchRecords()
+        // Refresh all data to ensure consistency
+        await fetchDispatchRecords()
+        await fetchProductions()
       } else {
         const error = await response.json()
         toast.error(error.error || "Failed to record dispatch")
@@ -381,6 +463,93 @@ export default function ProductionPage() {
     return production.totalEggs - dispatch.totalDispatched
   }
 
+  // Calculate current flock status from farm data
+  const calculateFlockStatus = () => {
+    if (farms.length === 0) {
+      return { maleCount: 0, femaleCount: 0, totalCount: 0 }
+    }
+
+    // Sum up the male and female counts from all farms
+    const totals = farms.reduce(
+      (sum, farm) => ({
+        maleCount: sum.maleCount + (farm.maleCount || 0),
+        femaleCount: sum.femaleCount + (farm.femaleCount || 0),
+        totalCount: sum.totalCount + (farm.maleCount || 0) + (farm.femaleCount || 0),
+      }),
+      { maleCount: 0, femaleCount: 0, totalCount: 0 }
+    )
+
+    return totals
+  }
+
+  // Calculate cold room stock totals
+  const calculateColdRoomStock = () => {
+    const totalProduction = productions.reduce(
+      (sum, prod) => ({
+        tableEggs: sum.tableEggs + prod.tableEggs,
+        hatchingEggs: sum.hatchingEggs + prod.hatchingEggs,
+        crackedEggs: sum.crackedEggs + prod.crackedEggs,
+        jumboEggs: sum.jumboEggs + prod.jumboEggs,
+        leakerEggs: sum.leakerEggs + prod.leakerEggs,
+        totalEggs: sum.totalEggs + prod.totalEggs,
+      }),
+      { tableEggs: 0, hatchingEggs: 0, crackedEggs: 0, jumboEggs: 0, leakerEggs: 0, totalEggs: 0 }
+    )
+
+    const totalDispatched = dispatchRecords.reduce(
+      (sum, dispatch) => ({
+        tableEggs: sum.tableEggs + dispatch.tableEggs,
+        hatchingEggs: sum.hatchingEggs + dispatch.hatchingEggs,
+        crackedEggs: sum.crackedEggs + dispatch.crackedEggs,
+        jumboEggs: sum.jumboEggs + dispatch.jumboEggs,
+        leakerEggs: sum.leakerEggs + dispatch.leakerEggs,
+        totalDispatched: sum.totalDispatched + dispatch.totalDispatched,
+      }),
+      { tableEggs: 0, hatchingEggs: 0, crackedEggs: 0, jumboEggs: 0, leakerEggs: 0, totalDispatched: 0 }
+    )
+
+    return {
+      tableEggs: totalProduction.tableEggs - totalDispatched.tableEggs,
+      hatchingEggs: totalProduction.hatchingEggs - totalDispatched.hatchingEggs,
+      crackedEggs: totalProduction.crackedEggs - totalDispatched.crackedEggs,
+      jumboEggs: totalProduction.jumboEggs - totalDispatched.jumboEggs,
+      leakerEggs: totalProduction.leakerEggs - totalDispatched.leakerEggs,
+      totalStock: totalProduction.totalEggs - totalDispatched.totalDispatched,
+      totalProduced: totalProduction.totalEggs,
+      totalDispatched: totalDispatched.totalDispatched,
+    }
+  }
+
+  // Calculate comparison metrics
+  const calculateComparisonMetrics = () => {
+    const coldRoomData = calculateColdRoomStock()
+
+    const heProduction = productions.reduce((sum, prod) => sum + prod.hatchingEggs, 0)
+    const hdProduction = productions.reduce((sum, prod) => sum + prod.totalEggs, 0)
+
+    const heDispatched = dispatchRecords.reduce((sum, dispatch) => sum + dispatch.hatchingEggs, 0)
+    const hdDispatched = dispatchRecords.reduce((sum, dispatch) => sum + dispatch.totalDispatched, 0)
+
+    const heStock = heProduction - heDispatched
+    const hdStock = hdProduction - hdDispatched
+
+    const heHdRatio = hdProduction > 0 ? (heProduction / hdProduction) * 100 : 0
+    const heDispatchRate = heProduction > 0 ? (heDispatched / heProduction) * 100 : 0
+    const hdDispatchRate = hdProduction > 0 ? (hdDispatched / hdProduction) * 100 : 0
+
+    return {
+      heProduction,
+      hdProduction,
+      heDispatched,
+      hdDispatched,
+      heStock,
+      hdStock,
+      heHdRatio,
+      heDispatchRate,
+      hdDispatchRate,
+    }
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -394,11 +563,11 @@ export default function ProductionPage() {
             <div className="mt-2 flex items-center space-x-2">
               <Calendar className="h-4 w-4 text-blue-500" />
               <span className="text-lg font-semibold text-blue-600">
-                {new Date().toLocaleDateString('en-US', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
+                {new Date().toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
                 })}
               </span>
             </div>
@@ -427,9 +596,9 @@ export default function ProductionPage() {
                 </DialogTrigger>
                 <DialogContent className="max-w-md">
                   <DialogHeader>
-                    <DialogTitle>Record Daily Production</DialogTitle>
+                    <DialogTitle>{isEditMode ? 'Edit Production Record' : 'Record Daily Production'}</DialogTitle>
                     <DialogDescription>
-                      Enter egg production data for today
+                      {isEditMode ? 'Update the production data' : 'Enter egg production data for today'}
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleProductionSubmit} className="space-y-4">
@@ -440,20 +609,20 @@ export default function ProductionPage() {
                           id="date"
                           type="date"
                           value={productionForm.date}
-                          onChange={(e) => setProductionForm({...productionForm, date: e.target.value})}
+                          onChange={(e) => setProductionForm({ ...productionForm, date: e.target.value })}
                           required
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="shed">Shed</Label>
-                        <Select value={productionForm.shedId} onValueChange={(value) => setProductionForm({...productionForm, shedId: value})}>
+                        <Label htmlFor="farm">Farm</Label>
+                        <Select value={productionForm.farmId} onValueChange={(value) => setProductionForm({ ...productionForm, farmId: value })}>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select shed" />
+                            <SelectValue placeholder="Select farm" />
                           </SelectTrigger>
                           <SelectContent>
-                            {sheds.map((shed) => (
-                              <SelectItem key={shed.id} value={shed.id}>
-                                {shed.name} - {shed.farm.name}
+                            {farms.map((farm) => (
+                              <SelectItem key={farm.id} value={farm.id}>
+                                {farm.name} - {farm.location}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -469,7 +638,7 @@ export default function ProductionPage() {
                           type="number"
                           min="0"
                           value={productionForm.tableEggs}
-                          onChange={(e) => setProductionForm({...productionForm, tableEggs: e.target.value})}
+                          onChange={(e) => setProductionForm({ ...productionForm, tableEggs: e.target.value })}
                           className="bg-blue-50 border-blue-200"
                         />
                       </div>
@@ -480,7 +649,7 @@ export default function ProductionPage() {
                           type="number"
                           min="0"
                           value={productionForm.hatchingEggs}
-                          onChange={(e) => setProductionForm({...productionForm, hatchingEggs: e.target.value})}
+                          onChange={(e) => setProductionForm({ ...productionForm, hatchingEggs: e.target.value })}
                           className="bg-green-50 border-green-200"
                         />
                       </div>
@@ -494,7 +663,7 @@ export default function ProductionPage() {
                           type="number"
                           min="0"
                           value={productionForm.crackedEggs}
-                          onChange={(e) => setProductionForm({...productionForm, crackedEggs: e.target.value})}
+                          onChange={(e) => setProductionForm({ ...productionForm, crackedEggs: e.target.value })}
                           className="bg-yellow-50 border-yellow-200"
                         />
                       </div>
@@ -505,7 +674,7 @@ export default function ProductionPage() {
                           type="number"
                           min="0"
                           value={productionForm.jumboEggs}
-                          onChange={(e) => setProductionForm({...productionForm, jumboEggs: e.target.value})}
+                          onChange={(e) => setProductionForm({ ...productionForm, jumboEggs: e.target.value })}
                           className="bg-purple-50 border-purple-200"
                         />
                       </div>
@@ -516,7 +685,7 @@ export default function ProductionPage() {
                           type="number"
                           min="0"
                           value={productionForm.leakerEggs}
-                          onChange={(e) => setProductionForm({...productionForm, leakerEggs: e.target.value})}
+                          onChange={(e) => setProductionForm({ ...productionForm, leakerEggs: e.target.value })}
                           className="bg-red-50 border-red-200"
                         />
                       </div>
@@ -530,20 +699,36 @@ export default function ProductionPage() {
                     </div>
 
                     <div className="space-y-2">
+                      <Label htmlFor="inchargeEggs">Incharge Eggs</Label>
+                      <Input
+                        id="inchargeEggs"
+                        type="number"
+                        min="0"
+                        value={productionForm.inchargeEggs}
+                        onChange={(e) => setProductionForm({ ...productionForm, inchargeEggs: e.target.value })}
+                        className="bg-orange-50 border-orange-200"
+                        placeholder="Total HD eggs + extra eggs"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
                       <Label htmlFor="notes">Notes (Optional)</Label>
                       <Textarea
                         id="notes"
                         value={productionForm.notes}
-                        onChange={(e) => setProductionForm({...productionForm, notes: e.target.value})}
+                        onChange={(e) => setProductionForm({ ...productionForm, notes: e.target.value })}
                         placeholder="Any additional notes..."
                       />
                     </div>
 
                     <DialogFooter>
-                      <Button type="button" variant="outline" onClick={() => setIsProductionDialogOpen(false)}>
+                      <Button type="button" variant="outline" onClick={() => {
+                        setIsProductionDialogOpen(false)
+                        resetProductionForm()
+                      }}>
                         Cancel
                       </Button>
-                      <Button type="submit">Record Production</Button>
+                      <Button type="submit">{isEditMode ? 'Update Production' : 'Record Production'}</Button>
                     </DialogFooter>
                   </form>
                 </DialogContent>
@@ -556,26 +741,27 @@ export default function ProductionPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date</TableHead>
-                      <TableHead>Shed</TableHead>
+                      <TableHead>Farm</TableHead>
                       <TableHead>Table Eggs</TableHead>
                       <TableHead>Hatching Eggs</TableHead>
                       <TableHead>Cracked</TableHead>
                       <TableHead>Jumbo</TableHead>
                       <TableHead>Leaker</TableHead>
                       <TableHead>Total HD Eggs</TableHead>
+                      <TableHead>Incharge Eggs</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-8">
+                        <TableCell colSpan={10} className="text-center py-8">
                           Loading production records...
                         </TableCell>
                       </TableRow>
                     ) : productions.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-8">
+                        <TableCell colSpan={10} className="text-center py-8">
                           No production records found. Record your first production!
                         </TableCell>
                       </TableRow>
@@ -585,8 +771,8 @@ export default function ProductionPage() {
                           <TableCell>{new Date(production.date).toLocaleDateString()}</TableCell>
                           <TableCell>
                             <div>
-                              <div className="font-medium">{production.shed.name}</div>
-                              <div className="text-sm text-gray-500">{production.shed.farm.name}</div>
+                              <div className="font-medium">{production.farm.name}</div>
+                              <div className="text-sm text-gray-500">{production.farm.location}</div>
                             </div>
                           </TableCell>
                           <TableCell>
@@ -620,11 +806,24 @@ export default function ProductionPage() {
                             </div>
                           </TableCell>
                           <TableCell>
+                            <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                              {production.inchargeEggs}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
                             <div className="flex space-x-2">
-                              <Button variant="outline" size="sm">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEditProduction(production)}
+                              >
                                 <Edit className="h-4 w-4" />
                               </Button>
-                              <Button variant="outline" size="sm">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteProduction(production.id)}
+                              >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
@@ -636,8 +835,8 @@ export default function ProductionPage() {
                 </Table>
               </CardContent>
             </Card>
-          </TabsContent>       
-   {/* Mortality Tab */}
+          </TabsContent>
+          {/* Mortality Tab */}
           <TabsContent value="mortality" className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Mortality Records</h2>
@@ -663,20 +862,20 @@ export default function ProductionPage() {
                           id="mortalityDate"
                           type="date"
                           value={mortalityForm.date}
-                          onChange={(e) => setMortalityForm({...mortalityForm, date: e.target.value})}
+                          onChange={(e) => setMortalityForm({ ...mortalityForm, date: e.target.value })}
                           required
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="mortalityShed">Shed</Label>
-                        <Select value={mortalityForm.shedId} onValueChange={(value) => setMortalityForm({...mortalityForm, shedId: value})}>
+                        <Label htmlFor="mortalityFarm">Farm</Label>
+                        <Select value={mortalityForm.farmId} onValueChange={(value) => setMortalityForm({ ...mortalityForm, farmId: value })}>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select shed" />
+                            <SelectValue placeholder="Select farm" />
                           </SelectTrigger>
                           <SelectContent>
-                            {sheds.map((shed) => (
-                              <SelectItem key={shed.id} value={shed.id}>
-                                {shed.name} - {shed.farm.name}
+                            {farms.map((farm) => (
+                              <SelectItem key={farm.id} value={farm.id}>
+                                {farm.name} - {farm.location}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -692,7 +891,7 @@ export default function ProductionPage() {
                           type="number"
                           min="0"
                           value={mortalityForm.maleMortality}
-                          onChange={(e) => setMortalityForm({...mortalityForm, maleMortality: e.target.value})}
+                          onChange={(e) => setMortalityForm({ ...mortalityForm, maleMortality: e.target.value })}
                           className="bg-blue-50 border-blue-200"
                         />
                       </div>
@@ -703,7 +902,7 @@ export default function ProductionPage() {
                           type="number"
                           min="0"
                           value={mortalityForm.femaleMortality}
-                          onChange={(e) => setMortalityForm({...mortalityForm, femaleMortality: e.target.value})}
+                          onChange={(e) => setMortalityForm({ ...mortalityForm, femaleMortality: e.target.value })}
                           className="bg-pink-50 border-pink-200"
                         />
                       </div>
@@ -721,7 +920,7 @@ export default function ProductionPage() {
                       <Textarea
                         id="mortalityNotes"
                         value={mortalityForm.notes}
-                        onChange={(e) => setMortalityForm({...mortalityForm, notes: e.target.value})}
+                        onChange={(e) => setMortalityForm({ ...mortalityForm, notes: e.target.value })}
                         placeholder="Cause of mortality, observations..."
                       />
                     </div>
@@ -749,16 +948,22 @@ export default function ProductionPage() {
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center p-3 bg-blue-50 rounded-lg">
-                      <div className="text-2xl font-bold text-blue-600">1,245</div>
+                      <div className="text-2xl font-bold text-blue-600">
+                        {calculateFlockStatus().maleCount.toLocaleString()}
+                      </div>
                       <div className="text-sm text-gray-600">Male Chickens</div>
                     </div>
                     <div className="text-center p-3 bg-pink-50 rounded-lg">
-                      <div className="text-2xl font-bold text-pink-600">4,890</div>
+                      <div className="text-2xl font-bold text-pink-600">
+                        {calculateFlockStatus().femaleCount.toLocaleString()}
+                      </div>
                       <div className="text-sm text-gray-600">Female Chickens</div>
                     </div>
                   </div>
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold text-gray-800">6,135</div>
+                    <div className="text-2xl font-bold text-gray-800">
+                      {calculateFlockStatus().totalCount.toLocaleString()}
+                    </div>
                     <div className="text-sm text-gray-600">Total Flock</div>
                   </div>
                 </CardContent>
@@ -774,7 +979,7 @@ export default function ProductionPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Date</TableHead>
-                        <TableHead>Shed</TableHead>
+                        <TableHead>Farm</TableHead>
                         <TableHead>Male</TableHead>
                         <TableHead>Female</TableHead>
                         <TableHead>Total</TableHead>
@@ -782,7 +987,14 @@ export default function ProductionPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {mortalityRecords.length === 0 ? (
+                      {loading ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                            <p className="mt-4 text-gray-600">Loading mortality records...</p>
+                          </TableCell>
+                        </TableRow>
+                      ) : mortalityRecords.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center py-8">
                             No mortality records found. Record your first mortality data!
@@ -792,7 +1004,12 @@ export default function ProductionPage() {
                         mortalityRecords.map((record) => (
                           <TableRow key={record.id}>
                             <TableCell>{new Date(record.date).toLocaleDateString()}</TableCell>
-                            <TableCell>Shed Name</TableCell>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{record.farm?.name || 'Unknown Farm'}</div>
+                                <div className="text-sm text-gray-500">{record.farm?.location || 'Unknown Location'}</div>
+                              </div>
+                            </TableCell>
                             <TableCell>
                               <Badge variant="secondary" className="bg-blue-100 text-blue-800">
                                 {record.maleMortality}
@@ -810,7 +1027,7 @@ export default function ProductionPage() {
                             </TableCell>
                             <TableCell>
                               <div className="text-sm">
-                                <div>M: 1,245 | F: 4,890</div>
+                                <div>Updated counts after mortality</div>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -849,20 +1066,20 @@ export default function ProductionPage() {
                           id="dispatchDate"
                           type="date"
                           value={dispatchForm.date}
-                          onChange={(e) => setDispatchForm({...dispatchForm, date: e.target.value})}
+                          onChange={(e) => setDispatchForm({ ...dispatchForm, date: e.target.value })}
                           required
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="dispatchShed">Shed</Label>
-                        <Select value={dispatchForm.shedId} onValueChange={(value) => setDispatchForm({...dispatchForm, shedId: value})}>
+                        <Label htmlFor="dispatchFarm">Farm</Label>
+                        <Select value={dispatchForm.farmId} onValueChange={(value) => setDispatchForm({ ...dispatchForm, farmId: value })}>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select shed" />
+                            <SelectValue placeholder="Select farm" />
                           </SelectTrigger>
                           <SelectContent>
-                            {sheds.map((shed) => (
-                              <SelectItem key={shed.id} value={shed.id}>
-                                {shed.name} - {shed.farm.name}
+                            {farms.map((farm) => (
+                              <SelectItem key={farm.id} value={farm.id}>
+                                {farm.name} - {farm.location}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -878,7 +1095,7 @@ export default function ProductionPage() {
                           type="number"
                           min="0"
                           value={dispatchForm.tableEggs}
-                          onChange={(e) => setDispatchForm({...dispatchForm, tableEggs: e.target.value})}
+                          onChange={(e) => setDispatchForm({ ...dispatchForm, tableEggs: e.target.value })}
                           className="bg-blue-50 border-blue-200"
                         />
                       </div>
@@ -889,7 +1106,7 @@ export default function ProductionPage() {
                           type="number"
                           min="0"
                           value={dispatchForm.hatchingEggs}
-                          onChange={(e) => setDispatchForm({...dispatchForm, hatchingEggs: e.target.value})}
+                          onChange={(e) => setDispatchForm({ ...dispatchForm, hatchingEggs: e.target.value })}
                           className="bg-green-50 border-green-200"
                         />
                       </div>
@@ -903,7 +1120,7 @@ export default function ProductionPage() {
                           type="number"
                           min="0"
                           value={dispatchForm.crackedEggs}
-                          onChange={(e) => setDispatchForm({...dispatchForm, crackedEggs: e.target.value})}
+                          onChange={(e) => setDispatchForm({ ...dispatchForm, crackedEggs: e.target.value })}
                           className="bg-yellow-50 border-yellow-200"
                         />
                       </div>
@@ -914,7 +1131,7 @@ export default function ProductionPage() {
                           type="number"
                           min="0"
                           value={dispatchForm.jumboEggs}
-                          onChange={(e) => setDispatchForm({...dispatchForm, jumboEggs: e.target.value})}
+                          onChange={(e) => setDispatchForm({ ...dispatchForm, jumboEggs: e.target.value })}
                           className="bg-purple-50 border-purple-200"
                         />
                       </div>
@@ -925,7 +1142,7 @@ export default function ProductionPage() {
                           type="number"
                           min="0"
                           value={dispatchForm.leakerEggs}
-                          onChange={(e) => setDispatchForm({...dispatchForm, leakerEggs: e.target.value})}
+                          onChange={(e) => setDispatchForm({ ...dispatchForm, leakerEggs: e.target.value })}
                           className="bg-red-50 border-red-200"
                         />
                       </div>
@@ -943,7 +1160,7 @@ export default function ProductionPage() {
                       <Textarea
                         id="dispatchNotes"
                         value={dispatchForm.notes}
-                        onChange={(e) => setDispatchForm({...dispatchForm, notes: e.target.value})}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, notes: e.target.value })}
                         placeholder="Destination, transport details..."
                       />
                     </div>
@@ -972,30 +1189,42 @@ export default function ProductionPage() {
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="text-center p-3 bg-blue-50 rounded-lg">
-                        <div className="text-xl font-bold text-blue-600">2,450</div>
+                        <div className="text-xl font-bold text-blue-600">
+                          {calculateColdRoomStock().tableEggs.toLocaleString()}
+                        </div>
                         <div className="text-sm text-gray-600">Table Eggs</div>
                       </div>
                       <div className="text-center p-3 bg-green-50 rounded-lg">
-                        <div className="text-xl font-bold text-green-600">1,890</div>
+                        <div className="text-xl font-bold text-green-600">
+                          {calculateColdRoomStock().hatchingEggs.toLocaleString()}
+                        </div>
                         <div className="text-sm text-gray-600">Hatching Eggs</div>
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div className="text-center p-2 bg-yellow-50 rounded-lg">
-                        <div className="text-lg font-bold text-yellow-600">150</div>
+                        <div className="text-lg font-bold text-yellow-600">
+                          {calculateColdRoomStock().crackedEggs.toLocaleString()}
+                        </div>
                         <div className="text-xs text-gray-600">Cracked</div>
                       </div>
                       <div className="text-center p-2 bg-purple-50 rounded-lg">
-                        <div className="text-lg font-bold text-purple-600">89</div>
+                        <div className="text-lg font-bold text-purple-600">
+                          {calculateColdRoomStock().jumboEggs.toLocaleString()}
+                        </div>
                         <div className="text-xs text-gray-600">Jumbo</div>
                       </div>
                       <div className="text-center p-2 bg-red-50 rounded-lg">
-                        <div className="text-lg font-bold text-red-600">45</div>
+                        <div className="text-lg font-bold text-red-600">
+                          {calculateColdRoomStock().leakerEggs.toLocaleString()}
+                        </div>
                         <div className="text-xs text-gray-600">Leaker</div>
                       </div>
                     </div>
                     <div className="text-center p-3 bg-gray-100 rounded-lg border-2 border-gray-300">
-                      <div className="text-2xl font-bold text-gray-800">4,624</div>
+                      <div className="text-2xl font-bold text-gray-800">
+                        {calculateColdRoomStock().totalStock.toLocaleString()}
+                      </div>
                       <div className="text-sm text-gray-600">Total Stock</div>
                     </div>
                   </div>
@@ -1012,13 +1241,20 @@ export default function ProductionPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Date</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead>Dispatched</TableHead>
-                        <TableHead>Remaining</TableHead>
+                        <TableHead>Farm</TableHead>
+                        <TableHead>Total Dispatched</TableHead>
+                        <TableHead>Breakdown</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {dispatchRecords.length === 0 ? (
+                      {loading ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-8">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                            <p className="mt-4 text-gray-600">Loading dispatch records...</p>
+                          </TableCell>
+                        </TableRow>
+                      ) : dispatchRecords.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={4} className="text-center py-8">
                             No dispatch records found. Record your first dispatch!
@@ -1028,15 +1264,22 @@ export default function ProductionPage() {
                         dispatchRecords.map((record) => (
                           <TableRow key={record.id}>
                             <TableCell>{new Date(record.date).toLocaleDateString()}</TableCell>
-                            <TableCell>Mixed</TableCell>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{record.farm?.name || 'Unknown Farm'}</div>
+                                <div className="text-sm text-gray-500">{record.farm?.location || 'Unknown Location'}</div>
+                              </div>
+                            </TableCell>
                             <TableCell>
                               <Badge variant="secondary" className="bg-orange-100 text-orange-800">
                                 {record.totalDispatched}
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <div className="text-sm font-medium">
-                                Stock remaining
+                              <div className="text-sm">
+                                <div>Table: {record.tableEggs}</div>
+                                <div>Hatching: {record.hatchingEggs}</div>
+                                <div>Others: {record.crackedEggs + record.jumboEggs + record.leakerEggs}</div>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -1067,15 +1310,21 @@ export default function ProductionPage() {
                 <CardContent>
                   <div className="space-y-4">
                     <div className="text-center p-4 bg-green-50 rounded-lg">
-                      <div className="text-3xl font-bold text-green-600">1,890</div>
+                      <div className="text-3xl font-bold text-green-600">
+                        {calculateComparisonMetrics().heProduction.toLocaleString()}
+                      </div>
                       <div className="text-sm text-gray-600">Total Production</div>
                     </div>
                     <div className="text-center p-3 bg-green-100 rounded-lg">
-                      <div className="text-xl font-bold text-green-700">1,200</div>
+                      <div className="text-xl font-bold text-green-700">
+                        {calculateComparisonMetrics().heDispatched.toLocaleString()}
+                      </div>
                       <div className="text-sm text-gray-600">Total Eggs Sold</div>
                     </div>
                     <div className="text-center p-3 bg-green-200 rounded-lg">
-                      <div className="text-xl font-bold text-green-800">690</div>
+                      <div className="text-xl font-bold text-green-800">
+                        {calculateComparisonMetrics().heStock.toLocaleString()}
+                      </div>
                       <div className="text-sm text-gray-600">Cold Room Stock</div>
                     </div>
                   </div>
@@ -1092,15 +1341,21 @@ export default function ProductionPage() {
                 <CardContent>
                   <div className="space-y-4">
                     <div className="text-center p-4 bg-blue-50 rounded-lg">
-                      <div className="text-3xl font-bold text-blue-600">4,624</div>
+                      <div className="text-3xl font-bold text-blue-600">
+                        {calculateComparisonMetrics().hdProduction.toLocaleString()}
+                      </div>
                       <div className="text-sm text-gray-600">Total Production</div>
                     </div>
                     <div className="text-center p-3 bg-blue-100 rounded-lg">
-                      <div className="text-xl font-bold text-blue-700">2,800</div>
+                      <div className="text-xl font-bold text-blue-700">
+                        {calculateComparisonMetrics().hdDispatched.toLocaleString()}
+                      </div>
                       <div className="text-sm text-gray-600">Total Eggs Sold</div>
                     </div>
                     <div className="text-center p-3 bg-blue-200 rounded-lg">
-                      <div className="text-xl font-bold text-blue-800">1,824</div>
+                      <div className="text-xl font-bold text-blue-800">
+                        {calculateComparisonMetrics().hdStock.toLocaleString()}
+                      </div>
                       <div className="text-sm text-gray-600">Cold Room Stock</div>
                     </div>
                   </div>
@@ -1117,15 +1372,21 @@ export default function ProductionPage() {
                 <CardContent>
                   <div className="space-y-4">
                     <div className="text-center p-3 bg-purple-50 rounded-lg">
-                      <div className="text-xl font-bold text-purple-600">40.9%</div>
+                      <div className="text-xl font-bold text-purple-600">
+                        {calculateComparisonMetrics().heHdRatio.toFixed(1)}%
+                      </div>
                       <div className="text-sm text-gray-600">HE/HD Ratio</div>
                     </div>
                     <div className="text-center p-3 bg-purple-100 rounded-lg">
-                      <div className="text-xl font-bold text-purple-700">63.5%</div>
+                      <div className="text-xl font-bold text-purple-700">
+                        {calculateComparisonMetrics().heDispatchRate.toFixed(1)}%
+                      </div>
                       <div className="text-sm text-gray-600">HE Dispatch Rate</div>
                     </div>
                     <div className="text-center p-3 bg-purple-200 rounded-lg">
-                      <div className="text-xl font-bold text-purple-800">60.6%</div>
+                      <div className="text-xl font-bold text-purple-800">
+                        {calculateComparisonMetrics().hdDispatchRate.toFixed(1)}%
+                      </div>
                       <div className="text-sm text-gray-600">HD Dispatch Rate</div>
                     </div>
                   </div>
@@ -1166,8 +1427,15 @@ export default function ProductionPage() {
                       productions.slice(0, 10).map((production) => {
                         const heProduction = production.hatchingEggs
                         const hdProduction = production.totalEggs
-                        const heDispatched = Math.floor(heProduction * 0.6) // Mock dispatch data
-                        const hdDispatched = Math.floor(hdProduction * 0.6)
+
+                        // Find corresponding dispatch record for this production
+                        const correspondingDispatch = dispatchRecords.find(
+                          dispatch => dispatch.farmId === production.farm.id &&
+                            new Date(dispatch.date).toDateString() === new Date(production.date).toDateString()
+                        )
+
+                        const heDispatched = correspondingDispatch?.hatchingEggs || 0
+                        const hdDispatched = correspondingDispatch?.totalDispatched || 0
                         const heStock = heProduction - heDispatched
                         const hdStock = hdProduction - hdDispatched
                         const ratio = hdProduction > 0 ? ((heProduction / hdProduction) * 100).toFixed(1) : "0.0"

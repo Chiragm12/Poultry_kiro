@@ -17,10 +17,36 @@ import {
 interface DashboardStats {
   totalProduction: number
   todayProduction: number
+  todayNormalEggs: number
   attendanceRate: number
   activeFarms: number
   activeSheds: number
   totalWorkers: number
+  presentWorkers: number
+}
+
+interface FlockData {
+  openingFemale: number
+  openingMale: number
+  mortalityF: number
+  mortalityM: number
+  closingFemale: number
+  closingMale: number
+}
+
+interface RecentActivity {
+  id: string
+  action: string
+  details: string
+  time: string
+}
+
+interface WeekStatus {
+  currentWeek: number
+  dayOfWeek: number
+  dayName: string
+  totalDays: number
+  weeksRemaining: number
 }
 
 export default function DashboardPage() {
@@ -28,75 +54,67 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({
     totalProduction: 0,
     todayProduction: 0,
+    todayNormalEggs: 0,
     attendanceRate: 0,
     activeFarms: 0,
     activeSheds: 0,
     totalWorkers: 0,
+    presentWorkers: 0,
+  })
+  const [flockData, setFlockData] = useState<FlockData>({
+    openingFemale: 0,
+    openingMale: 0,
+    mortalityF: 0,
+    mortalityM: 0,
+    closingFemale: 0,
+    closingMale: 0,
+  })
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([])
+  const [weekStatus, setWeekStatus] = useState<WeekStatus>({
+    currentWeek: 1,
+    dayOfWeek: 1,
+    dayName: 'Monday',
+    totalDays: 1,
+    weeksRemaining: 72,
   })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (session?.user) {
       fetchDashboardData()
+      fetchWeekStatus()
     }
   }, [session])
+
+  const fetchWeekStatus = async () => {
+    try {
+      const response = await fetch("/api/analytics/week-status")
+      if (response.ok) {
+        const result = await response.json()
+        if (result.data) {
+          setWeekStatus(result.data)
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching week status:", error)
+    }
+  }
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
       
-      // Fetch farms data
-      const farmsResponse = await fetch("/api/farms")
-      const farmsData = await farmsResponse.json()
-      const farms = farmsData.success ? farmsData.data : []
-      
-      // Fetch sheds data
-      const shedsResponse = await fetch("/api/sheds")
-      const shedsData = await shedsResponse.json()
-      const sheds = shedsData.success ? shedsData.data : []
-      
-      // Fetch production data
-      const productionResponse = await fetch("/api/production")
-      const productionData = await productionResponse.json()
-      const productions = productionData.success ? (productionData.data.productions || productionData.data) : []
-      
-      // Fetch users data
-      const usersResponse = await fetch("/api/users")
-      const usersData = await usersResponse.json()
-      const users = usersData.success ? usersData.data : []
-      
-      // Calculate today's production
-      const today = new Date().toISOString().split('T')[0]
-      const todayProductions = Array.isArray(productions) ? productions.filter((p: any) => 
-        new Date(p.date).toISOString().split('T')[0] === today
-      ) : []
-      
-      const todayTotal = todayProductions.reduce((sum: number, p: any) => sum + (p.sellableEggs || 0), 0)
-      
-      // Calculate total production (this month)
-      const currentMonth = new Date().getMonth()
-      const currentYear = new Date().getFullYear()
-      const monthlyProductions = Array.isArray(productions) ? productions.filter((p: any) => {
-        const prodDate = new Date(p.date)
-        return prodDate.getMonth() === currentMonth && prodDate.getFullYear() === currentYear
-      }) : []
-      
-      const monthlyTotal = monthlyProductions.reduce((sum: number, p: any) => sum + (p.sellableEggs || 0), 0)
-      
-      // Calculate attendance rate (mock for now, will be real when attendance API is implemented)
-      const attendanceRate = users.length > 0 ? Math.floor(Math.random() * 20) + 80 : 0
-      
-      setStats({
-        totalProduction: monthlyTotal,
-        todayProduction: todayTotal,
-        attendanceRate,
-        activeFarms: farms.length,
-        activeSheds: sheds.length,
-        totalWorkers: users.length,
-      })
+      const response = await fetch("/api/dashboard/stats")
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.data) {
+          setStats(result.data.stats)
+          setFlockData(result.data.flockData)
+          setRecentActivity(result.data.recentActivity)
+        }
+      }
     } catch (error) {
       console.error("Error fetching dashboard data:", error)
-      // Keep default values (all zeros) on error
     } finally {
       setLoading(false)
     }
@@ -105,12 +123,6 @@ export default function DashboardPage() {
   if (!session?.user) {
     return null
   }
-
-  const recentActivity = [
-    { id: 1, action: "Production recorded", details: `${stats.todayProduction} eggs today`, time: "2 hours ago" },
-    { id: 2, action: "Attendance marked", details: `${Math.floor(stats.totalWorkers * stats.attendanceRate / 100)} workers present`, time: "3 hours ago" },
-    { id: 3, action: "Farms active", details: `${stats.activeFarms} farms, ${stats.activeSheds} sheds`, time: "1 day ago" },
-  ]
 
   return (
     <DashboardLayout>
@@ -139,7 +151,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {loading ? "..." : Math.floor(stats.todayProduction * 0.7).toLocaleString()}
+                {loading ? "..." : stats.todayNormalEggs.toLocaleString()}
               </div>
               <p className="text-xs text-muted-foreground">
                 {stats.todayProduction === 0 ? "No production recorded today" : "Normal eggs collected today"}
@@ -173,7 +185,7 @@ export default function DashboardPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {stats.totalWorkers > 0 
-                  ? `${stats.totalWorkers - Math.floor(stats.totalWorkers * stats.attendanceRate / 100)} absent today`
+                  ? `${stats.totalWorkers - stats.presentWorkers} absent today`
                   : "No workers registered"
                 }
               </p>
@@ -241,13 +253,28 @@ export default function DashboardPage() {
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-700">Age (Weeks)</div>
                     <div className="text-2xl font-bold text-blue-600">
-                      {loading ? "..." : Math.floor(Math.random() * 52) + 1}
+                      {loading ? "..." : weekStatus.currentWeek}
                     </div>
                   </div>
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-700">Age (Day of Week)</div>
                     <div className="text-2xl font-bold text-green-600">
-                      {loading ? "..." : Math.floor(Math.random() * 7) + 1}
+                      {loading ? "..." : weekStatus.dayOfWeek}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-700">Day Name</div>
+                    <div className="text-lg font-semibold text-indigo-600">
+                      {loading ? "..." : weekStatus.dayName}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-700">Total Days</div>
+                    <div className="text-lg font-semibold text-cyan-600">
+                      {loading ? "..." : weekStatus.totalDays.toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -256,13 +283,13 @@ export default function DashboardPage() {
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-700">Opening Female</div>
                     <div className="text-lg font-semibold text-pink-600">
-                      {loading ? "..." : (Math.floor(Math.random() * 500) + 1000).toLocaleString()}
+                      {loading ? "..." : flockData.openingFemale.toLocaleString()}
                     </div>
                   </div>
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-700">Opening Male</div>
                     <div className="text-lg font-semibold text-blue-600">
-                      {loading ? "..." : (Math.floor(Math.random() * 100) + 50).toLocaleString()}
+                      {loading ? "..." : flockData.openingMale.toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -271,13 +298,13 @@ export default function DashboardPage() {
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-700">Mortality F</div>
                     <div className="text-lg font-semibold text-red-600">
-                      {loading ? "..." : Math.floor(Math.random() * 10)}
+                      {loading ? "..." : flockData.mortalityF}
                     </div>
                   </div>
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-700">Mortality M</div>
                     <div className="text-lg font-semibold text-red-600">
-                      {loading ? "..." : Math.floor(Math.random() * 5)}
+                      {loading ? "..." : flockData.mortalityM}
                     </div>
                   </div>
                 </div>
@@ -286,13 +313,13 @@ export default function DashboardPage() {
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-700">Closing Female</div>
                     <div className="text-lg font-semibold text-pink-500">
-                      {loading ? "..." : (Math.floor(Math.random() * 500) + 990).toLocaleString()}
+                      {loading ? "..." : flockData.closingFemale.toLocaleString()}
                     </div>
                   </div>
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-700">Closing Male</div>
                     <div className="text-lg font-semibold text-blue-500">
-                      {loading ? "..." : (Math.floor(Math.random() * 100) + 45).toLocaleString()}
+                      {loading ? "..." : flockData.closingMale.toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -302,47 +329,81 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
+              <CardTitle>Recent Activity</CardTitle>
               <CardDescription>
-                Common tasks you might want to perform
+                Latest actions and updates in your system
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-3">
-                <button 
-                  className="p-4 text-left border rounded-lg hover:bg-gray-50 transition-colors"
-                  onClick={() => window.location.href = '/production'}
-                >
-                  <Egg className="h-6 w-6 text-blue-500 mb-2" />
-                  <div className="text-sm font-medium">Record Production</div>
-                  <div className="text-xs text-gray-500">Add today's egg count</div>
-                </button>
-                <button 
-                  className="p-4 text-left border rounded-lg hover:bg-gray-50 transition-colors"
-                  onClick={() => window.location.href = '/attendance'}
-                >
-                  <Calendar className="h-6 w-6 text-green-500 mb-2" />
-                  <div className="text-sm font-medium">Mark Attendance</div>
-                  <div className="text-xs text-gray-500">Record worker attendance</div>
-                </button>
-                <button 
-                  className="p-4 text-left border rounded-lg hover:bg-gray-50 transition-colors"
-                  onClick={() => window.location.href = '/farms'}
-                >
-                  <Building2 className="h-6 w-6 text-purple-500 mb-2" />
-                  <div className="text-sm font-medium">Manage Farms</div>
-                  <div className="text-xs text-gray-500">Add or edit farms</div>
-                </button>
-                <button 
-                  className="p-4 text-left border rounded-lg hover:bg-gray-50 transition-colors"
-                  onClick={() => window.location.href = '/reports'}
-                >
-                  <TrendingUp className="h-6 w-6 text-orange-500 mb-2" />
-                  <div className="text-sm font-medium">View Reports</div>
-                  <div className="text-xs text-gray-500">Generate analytics</div>
-                </button>
+              <div className="space-y-3">
+                {loading ? (
+                  <div className="space-y-2">
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div>
+                  </div>
+                ) : recentActivity.length === 0 ? (
+                  <p className="text-sm text-gray-500">No recent activity</p>
+                ) : (
+                  recentActivity.map((activity) => (
+                    <div key={activity.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <div>
+                        <div className="text-sm font-medium">{activity.action}</div>
+                        <div className="text-xs text-gray-500">{activity.details}</div>
+                      </div>
+                      <div className="text-xs text-gray-400">{activity.time}</div>
+                    </div>
+                  ))
+                )}
               </div>
             </CardContent>
+          </Card>
+        </div>
+
+        {/* Quick Actions */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+            <CardDescription>
+              Common tasks you might want to perform
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <button 
+                className="p-4 text-left border rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={() => window.location.href = '/production'}
+              >
+                <Egg className="h-6 w-6 text-blue-500 mb-2" />
+                <div className="text-sm font-medium">Record Production</div>
+                <div className="text-xs text-gray-500">Add today's egg count</div>
+              </button>
+              <button 
+                className="p-4 text-left border rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={() => window.location.href = '/attendance'}
+              >
+                <Calendar className="h-6 w-6 text-green-500 mb-2" />
+                <div className="text-sm font-medium">Mark Attendance</div>
+                <div className="text-xs text-gray-500">Record worker attendance</div>
+              </button>
+              <button 
+                className="p-4 text-left border rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={() => window.location.href = '/farms'}
+              >
+                <Building2 className="h-6 w-6 text-purple-500 mb-2" />
+                <div className="text-sm font-medium">Manage Farms</div>
+                <div className="text-xs text-gray-500">Add or edit farms</div>
+              </button>
+              <button 
+                className="p-4 text-left border rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={() => window.location.href = '/production-cycles'}
+              >
+                <TrendingUp className="h-6 w-6 text-orange-500 mb-2" />
+                <div className="text-sm font-medium">Production Cycles</div>
+                <div className="text-xs text-gray-500">Manage week tracking</div>
+              </button>
+            </div>
+          </CardContent>
           </Card>
         </div>
       </div>

@@ -6,20 +6,18 @@ export async function GET(request: NextRequest) {
   try {
     const organizationId = await getOrganizationId(request)
     const { searchParams } = new URL(request.url)
-    const shedId = searchParams.get("shedId")
+    const farmId = searchParams.get("farmId")
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
 
     const whereClause: any = {
-      shed: {
-        farm: {
-          organizationId,
-        },
+      farm: {
+        organizationId,
       },
     }
 
-    if (shedId) {
-      whereClause.shedId = shedId
+    if (farmId) {
+      whereClause.farmId = farmId
     }
 
     if (startDate && endDate) {
@@ -32,16 +30,11 @@ export async function GET(request: NextRequest) {
     const dispatchRecords = await prisma.dispatchRecord.findMany({
       where: whereClause,
       include: {
-        shed: {
+        farm: {
           select: {
             id: true,
             name: true,
-            farm: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            location: true,
           },
         },
       },
@@ -61,18 +54,20 @@ export async function POST(request: NextRequest) {
     const organizationId = await getOrganizationId(request)
     const body = await request.json()
 
-    // Verify shed exists and belongs to the organization
-    const shed = await prisma.shed.findFirst({
+    if (!body.farmId) {
+      return createErrorResponse("Farm ID is required", 400)
+    }
+
+    // Verify farm exists and belongs to the organization
+    const farm = await prisma.farm.findFirst({
       where: {
-        id: body.shedId,
-        farm: {
-          organizationId,
-        },
+        id: body.farmId,
+        organizationId,
       },
     })
 
-    if (!shed) {
-      return createErrorResponse("Shed not found", 404)
+    if (!farm) {
+      return createErrorResponse("Farm not found", 404)
     }
 
     const tableEggs = parseInt(body.tableEggs) || 0
@@ -92,20 +87,15 @@ export async function POST(request: NextRequest) {
         leakerEggs,
         totalDispatched,
         notes: body.notes,
-        shedId: body.shedId,
+        farmId: body.farmId,
         productionId: body.productionId,
       },
       include: {
-        shed: {
+        farm: {
           select: {
             id: true,
             name: true,
-            farm: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            location: true,
           },
         },
       },

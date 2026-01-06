@@ -6,20 +6,18 @@ export async function GET(request: NextRequest) {
   try {
     const organizationId = await getOrganizationId(request)
     const { searchParams } = new URL(request.url)
-    const shedId = searchParams.get("shedId")
+    const farmId = searchParams.get("farmId")
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
 
     const whereClause: any = {
-      shed: {
-        farm: {
-          organizationId,
-        },
+      farm: {
+        organizationId,
       },
     }
 
-    if (shedId) {
-      whereClause.shedId = shedId
+    if (farmId) {
+      whereClause.farmId = farmId
     }
 
     if (startDate && endDate) {
@@ -32,16 +30,11 @@ export async function GET(request: NextRequest) {
     const mortalityRecords = await prisma.mortalityRecord.findMany({
       where: whereClause,
       include: {
-        shed: {
+        farm: {
           select: {
             id: true,
             name: true,
-            farm: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            location: true,
           },
         },
       },
@@ -61,46 +54,61 @@ export async function POST(request: NextRequest) {
     const organizationId = await getOrganizationId(request)
     const body = await request.json()
 
-    // Verify shed exists and belongs to the organization
-    const shed = await prisma.shed.findFirst({
+    if (!body.farmId) {
+      return createErrorResponse("Farm ID is required", 400)
+    }
+
+    // Verify farm exists and belongs to the organization
+    const farm = await prisma.farm.findFirst({
       where: {
-        id: body.shedId,
-        farm: {
-          organizationId,
-        },
+        id: body.farmId,
+        organizationId,
       },
     })
 
-    if (!shed) {
-      return createErrorResponse("Shed not found", 404)
+    if (!farm) {
+      return createErrorResponse("Farm not found", 404)
     }
 
-    const mortalityRecord = await prisma.mortalityRecord.create({
-      data: {
-        date: new Date(body.date),
-        maleMortality: parseInt(body.maleMortality) || 0,
-        femaleMortality: parseInt(body.femaleMortality) || 0,
-        notes: body.notes,
-        shedId: body.shedId,
-        productionId: body.productionId,
-      },
-      include: {
-        shed: {
-          select: {
-            id: true,
-            name: true,
-            farm: {
-              select: {
-                id: true,
-                name: true,
-              },
+    const maleMortality = parseInt(body.maleMortality) || 0
+    const femaleMortality = parseInt(body.femaleMortality) || 0
+
+    // Create mortality record and update farm counts in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Create the mortality record
+      const mortalityRecord = await tx.mortalityRecord.create({
+        data: {
+          date: new Date(body.date),
+          maleMortality,
+          femaleMortality,
+          notes: body.notes,
+          farmId: body.farmId,
+          productionId: body.productionId,
+        },
+        include: {
+          farm: {
+            select: {
+              id: true,
+              name: true,
+              location: true,
             },
           },
         },
-      },
+      })
+
+      // Update farm counts by subtracting mortality
+      const updatedFarm = await tx.farm.update({
+        where: { id: body.farmId },
+        data: {
+          maleCount: Math.max(0, (farm.maleCount || 0) - maleMortality),
+          femaleCount: Math.max(0, (farm.femaleCount || 0) - femaleMortality),
+        },
+      })
+
+      return { mortalityRecord, updatedFarm }
     })
 
-    return createSuccessResponse(mortalityRecord, "Mortality record created successfully")
+    return createSuccessResponse(result.mortalityRecord, "Mortality record created and farm counts updated successfully")
   } catch (error) {
     return handleApiError(error)
   }

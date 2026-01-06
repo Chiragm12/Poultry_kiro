@@ -14,24 +14,16 @@ export async function GET(
     const production = await prisma.production.findFirst({
       where: {
         id,
-        shed: {
-          farm: {
-            organizationId,
-          },
+        farm: {
+          organizationId,
         },
       },
       include: {
-        shed: {
+        farm: {
           select: {
             id: true,
             name: true,
-            capacity: true,
-            farm: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            location: true,
           },
         },
       },
@@ -62,16 +54,13 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const validatedData = updateProductionSchema.parse(body)
-
+    
     // Verify production record exists and belongs to the organization
     const existingProduction = await prisma.production.findFirst({
       where: {
         id,
-        shed: {
-          farm: {
-            organizationId,
-          },
+        farm: {
+          organizationId,
         },
       },
     })
@@ -80,28 +69,29 @@ export async function PUT(
       return createErrorResponse("Production record not found", 404)
     }
 
-    // Calculate sellable eggs (normal + commercial eggs)
-    let sellableEggs = existingProduction.sellableEggs
-    if (validatedData.normalEggs !== undefined || validatedData.commEggs !== undefined) {
-      const normalEggs = validatedData.normalEggs ?? existingProduction.normalEggs
-      const commEggs = validatedData.commEggs ?? existingProduction.commEggs
-      sellableEggs = normalEggs + commEggs
+    // Calculate total eggs
+    const totalEggs = (body.tableEggs || 0) + (body.hatchingEggs || 0) + 
+                     (body.crackedEggs || 0) + (body.jumboEggs || 0) + (body.leakerEggs || 0)
+
+    const updateData = {
+      date: body.date ? new Date(body.date) : undefined,
+      tableEggs: body.tableEggs || 0,
+      hatchingEggs: body.hatchingEggs || 0,
+      crackedEggs: body.crackedEggs || 0,
+      jumboEggs: body.jumboEggs || 0,
+      leakerEggs: body.leakerEggs || 0,
+      inchargeEggs: body.inchargeEggs || 0,
+      totalEggs,
+      notes: body.notes,
+      farmId: body.farmId,
     }
 
-    // Update backward compatibility fields
-    const updateData: any = {
-      ...validatedData,
-      sellableEggs,
-    }
-
-    // Handle backward compatibility
-    if (validatedData.creakEggs !== undefined) {
-      updateData.crackedEggs = validatedData.creakEggs
-      updateData.brokenEggs = validatedData.creakEggs
-    }
-    if (validatedData.jellyEggs !== undefined) {
-      updateData.damagedEggs = validatedData.jellyEggs
-    }
+    // Remove undefined values
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key as keyof typeof updateData] === undefined) {
+        delete updateData[key as keyof typeof updateData]
+      }
+    })
 
     const production = await prisma.production.update({
       where: {
@@ -109,17 +99,11 @@ export async function PUT(
       },
       data: updateData,
       include: {
-        shed: {
+        farm: {
           select: {
             id: true,
             name: true,
-            capacity: true,
-            farm: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            location: true,
           },
         },
       },
@@ -149,10 +133,8 @@ export async function DELETE(
     const existingProduction = await prisma.production.findFirst({
       where: {
         id,
-        shed: {
-          farm: {
-            organizationId,
-          },
+        farm: {
+          organizationId,
         },
       },
     })
