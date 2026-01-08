@@ -1,10 +1,10 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import DashboardLayout from "@/components/layout/dashboard-layout"
+import { useDashboardStats, useWeekStatus } from "@/hooks/use-dashboard"
 import { 
   Egg, 
   Users, 
@@ -14,44 +14,16 @@ import {
   AlertTriangle
 } from "lucide-react"
 
-interface DashboardStats {
-  totalProduction: number
-  todayProduction: number
-  todayNormalEggs: number
-  attendanceRate: number
-  activeFarms: number
-  activeSheds: number
-  totalWorkers: number
-  presentWorkers: number
-}
-
-interface FlockData {
-  openingFemale: number
-  openingMale: number
-  mortalityF: number
-  mortalityM: number
-  closingFemale: number
-  closingMale: number
-}
-
-interface RecentActivity {
-  id: string
-  action: string
-  details: string
-  time: string
-}
-
-interface WeekStatus {
-  currentWeek: number
-  dayOfWeek: number
-  dayName: string
-  totalDays: number
-  weeksRemaining: number
-}
-
 export default function DashboardPage() {
   const { data: session } = useSession()
-  const [stats, setStats] = useState<DashboardStats>({
+  const { data: dashboardData, isLoading: isDashboardLoading } = useDashboardStats()
+  const { data: weekStatus, isLoading: isWeekLoading } = useWeekStatus()
+
+  if (!session?.user) {
+    return null
+  }
+
+  const stats = dashboardData?.stats || {
     totalProduction: 0,
     todayProduction: 0,
     todayNormalEggs: 0,
@@ -60,69 +32,28 @@ export default function DashboardPage() {
     activeSheds: 0,
     totalWorkers: 0,
     presentWorkers: 0,
-  })
-  const [flockData, setFlockData] = useState<FlockData>({
+  }
+
+  const flockData = dashboardData?.flockData || {
     openingFemale: 0,
     openingMale: 0,
     mortalityF: 0,
     mortalityM: 0,
     closingFemale: 0,
     closingMale: 0,
-  })
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([])
-  const [weekStatus, setWeekStatus] = useState<WeekStatus>({
+  }
+
+  const recentActivity = dashboardData?.recentActivity || []
+
+  const weekData = weekStatus || {
     currentWeek: 1,
     dayOfWeek: 1,
     dayName: 'Monday',
     totalDays: 1,
     weeksRemaining: 72,
-  })
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (session?.user) {
-      fetchDashboardData()
-      fetchWeekStatus()
-    }
-  }, [session])
-
-  const fetchWeekStatus = async () => {
-    try {
-      const response = await fetch("/api/analytics/week-status")
-      if (response.ok) {
-        const result = await response.json()
-        if (result.data) {
-          setWeekStatus(result.data)
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching week status:", error)
-    }
   }
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true)
-      
-      const response = await fetch("/api/dashboard/stats")
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success && result.data) {
-          setStats(result.data.stats)
-          setFlockData(result.data.flockData)
-          setRecentActivity(result.data.recentActivity)
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching dashboard data:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (!session?.user) {
-    return null
-  }
+  const loading = isDashboardLoading || isWeekLoading
 
   return (
     <DashboardLayout>
@@ -253,13 +184,13 @@ export default function DashboardPage() {
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-700">Age (Weeks)</div>
                     <div className="text-2xl font-bold text-blue-600">
-                      {loading ? "..." : weekStatus.currentWeek}
+                      {loading ? "..." : weekData.currentWeek}
                     </div>
                   </div>
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-700">Age (Day of Week)</div>
                     <div className="text-2xl font-bold text-green-600">
-                      {loading ? "..." : weekStatus.dayOfWeek}
+                      {loading ? "..." : weekData.dayOfWeek}
                     </div>
                   </div>
                 </div>
@@ -268,13 +199,13 @@ export default function DashboardPage() {
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-700">Day Name</div>
                     <div className="text-lg font-semibold text-indigo-600">
-                      {loading ? "..." : weekStatus.dayName}
+                      {loading ? "..." : weekData.dayName}
                     </div>
                   </div>
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-700">Total Days</div>
                     <div className="text-lg font-semibold text-cyan-600">
-                      {loading ? "..." : weekStatus.totalDays.toLocaleString()}
+                      {loading ? "..." : weekData.totalDays.toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -404,8 +335,7 @@ export default function DashboardPage() {
               </button>
             </div>
           </CardContent>
-          </Card>
-        </div>
+        </Card>
       </div>
     </DashboardLayout>
   )

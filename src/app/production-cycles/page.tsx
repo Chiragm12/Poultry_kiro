@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,36 +13,18 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import DashboardLayout from "@/components/layout/dashboard-layout"
 import { Plus, Calendar, Edit, Trash2, AlertTriangle, CheckCircle, Clock, RotateCcw } from "lucide-react"
-import { toast } from "sonner"
 import { format } from "date-fns"
-
-interface ProductionCycle {
-  id: string
-  name: string
-  startDate: string
-  startWeek: number
-  expectedEndWeek: number
-  isActive: boolean
-  farmId: string
-  createdAt: string
-  farm: {
-    id: string
-    name: string
-    location: string
-  }
-}
-
-interface Farm {
-  id: string
-  name: string
-  location: string
-}
+import { useProductionCycles, useCreateProductionCycle, useUpdateProductionCycle, useDeleteProductionCycle } from "@/hooks/use-production-cycles"
+import { useFarms } from "@/hooks/use-farms"
 
 export default function ProductionCyclesPage() {
   const { data: session } = useSession()
-  const [cycles, setCycles] = useState<ProductionCycle[]>([])
-  const [farms, setFarms] = useState<Farm[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: cycles = [], isLoading: cyclesLoading } = useProductionCycles()
+  const { data: farms = [], isLoading: farmsLoading } = useFarms()
+  const createCycleMutation = useCreateProductionCycle()
+  const updateCycleMutation = useUpdateProductionCycle()
+  const deleteCycleMutation = useDeleteProductionCycle()
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [editingCycleId, setEditingCycleId] = useState<string | null>(null)
@@ -55,74 +37,30 @@ export default function ProductionCyclesPage() {
     farmId: "",
   })
 
-  useEffect(() => {
-    if (session?.user) {
-      fetchCycles()
-      fetchFarms()
-    }
-  }, [session])
-
-  const fetchCycles = async () => {
-    try {
-      const response = await fetch("/api/production-cycles")
-      if (response.ok) {
-        const result = await response.json()
-        setCycles(result.data || [])
-      }
-    } catch (error) {
-      console.error("Error fetching cycles:", error)
-      toast.error("Failed to load production cycles")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchFarms = async () => {
-    try {
-      const response = await fetch("/api/farms")
-      if (response.ok) {
-        const result = await response.json()
-        setFarms(result.data || [])
-      }
-    } catch (error) {
-      console.error("Error fetching farms:", error)
-    }
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!formData.farmId) {
-      toast.error("Please select a farm")
       return
     }
 
+    const data = {
+      ...formData,
+      startWeek: parseInt(formData.startWeek),
+      expectedEndWeek: parseInt(formData.expectedEndWeek),
+    }
+
     try {
-      const url = isEditMode ? `/api/production-cycles/${editingCycleId}` : "/api/production-cycles"
-      const method = isEditMode ? "PUT" : "POST"
-
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...formData,
-          startWeek: parseInt(formData.startWeek),
-          expectedEndWeek: parseInt(formData.expectedEndWeek),
-        }),
-      })
-
-      if (response.ok) {
-        toast.success(isEditMode ? "Production cycle updated successfully" : "Production cycle created successfully")
-        setIsDialogOpen(false)
-        resetForm()
-        fetchCycles()
+      if (isEditMode && editingCycleId) {
+        await updateCycleMutation.mutateAsync({ id: editingCycleId, data })
       } else {
-        const error = await response.json()
-        toast.error(error.error || `Failed to ${isEditMode ? 'update' : 'create'} production cycle`)
+        await createCycleMutation.mutateAsync(data)
       }
+      
+      setIsDialogOpen(false)
+      resetForm()
     } catch (error) {
-      console.error("Error with production cycle:", error)
-      toast.error(`Error ${isEditMode ? 'updating' : 'creating'} production cycle`)
+      // Error handling is done in the mutation hooks
     }
   }
 
@@ -138,7 +76,7 @@ export default function ProductionCyclesPage() {
     setEditingCycleId(null)
   }
 
-  const handleEdit = (cycle: ProductionCycle) => {
+  const handleEdit = (cycle: any) => {
     setFormData({
       name: cycle.name,
       startDate: new Date(cycle.startDate).toISOString().split('T')[0],
@@ -157,41 +95,20 @@ export default function ProductionCyclesPage() {
     }
 
     try {
-      const response = await fetch(`/api/production-cycles/${cycleId}`, {
-        method: "DELETE",
-      })
-
-      if (response.ok) {
-        toast.success("Production cycle deleted successfully")
-        fetchCycles()
-      } else {
-        const error = await response.json()
-        toast.error(error.error || "Failed to delete production cycle")
-      }
+      await deleteCycleMutation.mutateAsync(cycleId)
     } catch (error) {
-      console.error("Error deleting cycle:", error)
-      toast.error("Error deleting production cycle")
+      // Error handling is done in the mutation hook
     }
   }
 
   const handleActivate = async (cycleId: string) => {
     try {
-      const response = await fetch(`/api/production-cycles/${cycleId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: true }),
+      await updateCycleMutation.mutateAsync({ 
+        id: cycleId, 
+        data: { isActive: true } 
       })
-
-      if (response.ok) {
-        toast.success("Production cycle activated successfully")
-        fetchCycles()
-      } else {
-        const error = await response.json()
-        toast.error(error.error || "Failed to activate production cycle")
-      }
     } catch (error) {
-      console.error("Error activating cycle:", error)
-      toast.error("Error activating production cycle")
+      // Error handling is done in the mutation hook
     }
   }
 
@@ -215,6 +132,9 @@ export default function ProductionCyclesPage() {
       </DashboardLayout>
     )
   }
+
+  const loading = cyclesLoading || farmsLoading
+  const isSubmitting = createCycleMutation.isPending || updateCycleMutation.isPending
 
   return (
     <DashboardLayout>
@@ -317,7 +237,9 @@ export default function ProductionCyclesPage() {
                   }}>
                     Cancel
                   </Button>
-                  <Button type="submit">{isEditMode ? 'Update Cycle' : 'Create Cycle'}</Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? 'Saving...' : (isEditMode ? 'Update Cycle' : 'Create Cycle')}
+                  </Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -406,6 +328,7 @@ export default function ProductionCyclesPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => handleActivate(cycle.id)}
+                              disabled={updateCycleMutation.isPending}
                             >
                               <RotateCcw className="h-4 w-4" />
                             </Button>
@@ -421,6 +344,7 @@ export default function ProductionCyclesPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleDelete(cycle.id)}
+                            disabled={deleteCycleMutation.isPending}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

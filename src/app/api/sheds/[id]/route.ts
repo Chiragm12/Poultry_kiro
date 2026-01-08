@@ -26,23 +26,6 @@ export async function GET(
             location: true,
           },
         },
-        productions: {
-          select: {
-            id: true,
-            date: true,
-            totalEggs: true,
-            sellableEggs: true,
-          },
-          orderBy: {
-            date: 'desc',
-          },
-          take: 10,
-        },
-        _count: {
-          select: {
-            productions: true,
-          },
-        },
       },
     })
 
@@ -118,11 +101,6 @@ export async function PUT(
             location: true,
           },
         },
-        _count: {
-          select: {
-            productions: true,
-          },
-        },
       },
     })
 
@@ -155,11 +133,7 @@ export async function DELETE(
         },
       },
       include: {
-        _count: {
-          select: {
-            productions: true,
-          },
-        },
+        farm: true,
       },
     })
 
@@ -167,11 +141,7 @@ export async function DELETE(
       return createErrorResponse("Shed not found", 404)
     }
 
-    // Check if shed has production records
-    if (existingShed._count.productions > 0) {
-      return createErrorResponse("Cannot delete shed with existing production records", 400)
-    }
-
+    // Since productions are linked to farms, not sheds, we can safely delete the shed
     await prisma.shed.delete({
       where: {
         id: shedId,

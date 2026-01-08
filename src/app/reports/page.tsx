@@ -24,7 +24,10 @@ import {
   BarChart3
 } from "lucide-react"
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns"
+import { useWeekStatus } from "@/hooks/use-dashboard"
+import { useWeeklyProduction, useGenerateReport } from "@/hooks/use-reports"
 import { toast } from "sonner"
+import CSVImportAnalytics from "@/components/reports/csv-import-analytics"
 
 interface Farm {
   id: string
@@ -46,8 +49,9 @@ export default function ReportsPage() {
   const { data: session } = useSession()
   const [loading, setLoading] = useState(false)
   const [reportData, setReportData] = useState<any>(null)
-  const [weekStatus, setWeekStatus] = useState<any>(null)
-  const [weeklyProduction, setWeeklyProduction] = useState<any[]>([])
+  const { data: weekStatus } = useWeekStatus()
+  const { data: weeklyProduction = [] } = useWeeklyProduction(8)
+  const generateReportMutation = useGenerateReport()
   const [farms, setFarms] = useState<Farm[]>([])
   const [sheds, setSheds] = useState<Shed[]>([])
   const [managers, setManagers] = useState<Manager[]>([])
@@ -149,8 +153,6 @@ export default function ReportsPage() {
   }
 
   const generateReport = async () => {
-    setLoading(true)
-
     try {
       const { startDate, endDate } = getDateRange()
 
@@ -163,35 +165,21 @@ export default function ReportsPage() {
         managerId: selectedManager !== "all-managers" ? selectedManager : undefined
       }
 
-      const response = await fetch("/api/reports", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      })
+      const result = await generateReportMutation.mutateAsync(requestBody)
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to generate report")
-      }
-
-      console.log("Report data received:", result.data)
-      if (result.data.production) {
-        console.log("Production data:", result.data.production)
-        if (result.data.production.productionDetails) {
-          console.log("Production details count:", result.data.production.productionDetails.length)
+      console.log("Report data received:", result)
+      if (result.production) {
+        console.log("Production data:", result.production)
+        if (result.production.productionDetails) {
+          console.log("Production details count:", result.production.productionDetails.length)
         }
       }
 
-      setReportData(result.data)
+      setReportData(result)
       toast.success("Report generated successfully")
     } catch (error) {
       console.error("Error generating report:", error)
       toast.error(error instanceof Error ? error.message : "Failed to generate report")
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -635,10 +623,10 @@ export default function ReportsPage() {
 
                 <Button
                   onClick={generateReport}
-                  disabled={loading}
+                  disabled={generateReportMutation.isPending}
                   className="w-full"
                 >
-                  {loading ? (
+                  {generateReportMutation.isPending ? (
                     <>
                       <Clock className="mr-2 h-4 w-4 animate-spin" />
                       Generating...
@@ -886,6 +874,11 @@ export default function ReportsPage() {
               </Card>
             )}
           </div>
+        </div>
+
+        {/* Historical Data Analytics Section */}
+        <div className="mt-8">
+          <CSVImportAnalytics />
         </div>
       </div>
     </DashboardLayout>

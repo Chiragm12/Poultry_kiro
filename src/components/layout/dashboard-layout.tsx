@@ -5,7 +5,7 @@ import { useSession, signOut } from "next-auth/react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
@@ -60,9 +60,38 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="dashboard-layout min-h-screen bg-gray-50">
       <Toaster />
       
+      {/* Desktop sidebar */}
+      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
+        <div className="flex flex-col flex-grow bg-white border-r border-gray-200">
+          <div className="flex h-16 items-center px-6 border-b">
+            <h1 className="text-xl font-semibold text-gray-900">Poultry Farm</h1>
+          </div>
+          <nav className="flex-1 space-y-1 px-3 py-4">
+            {filteredNavigation.map((item) => {
+              const isActive = pathname === item.href
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    isActive
+                      ? "bg-blue-100 text-blue-700"
+                      : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  <item.icon className="mr-3 h-5 w-5" />
+                  {item.name}
+                </Link>
+              )
+            })}
+          </nav>
+        </div>
+      </div>
+
       {/* Mobile sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-64 p-0">
+          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
           <div className="flex h-full flex-col">
             <div className="flex h-16 items-center px-6 border-b">
               <h1 className="text-xl font-semibold">Poultry Farm</h1>
@@ -89,34 +118,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </nav>
           </div>
         </SheetContent>
-
-        {/* Desktop sidebar */}
-        <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-          <div className="flex flex-col flex-grow bg-white border-r border-gray-200">
-            <div className="flex h-16 items-center px-6 border-b">
-              <h1 className="text-xl font-semibold text-gray-900">Poultry Farm</h1>
-            </div>
-            <nav className="flex-1 space-y-1 px-3 py-4">
-              {filteredNavigation.map((item) => {
-                const isActive = pathname === item.href
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                      isActive
-                        ? "bg-blue-100 text-blue-700"
-                        : "text-gray-700 hover:bg-gray-100"
-                    }`}
-                  >
-                    <item.icon className="mr-3 h-5 w-5" />
-                    {item.name}
-                  </Link>
-                )
-              })}
-            </nav>
-          </div>
-        </div>
 
         {/* Main content */}
         <div className="lg:pl-64">

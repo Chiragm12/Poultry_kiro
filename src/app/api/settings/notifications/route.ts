@@ -16,6 +16,16 @@ export async function GET(request: NextRequest) {
   try {
     const userId = await getUserId(request)
     
+    // First check if user exists
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true }
+    })
+
+    if (!user) {
+      return createErrorResponse("User not found", 404)
+    }
+    
     // Check if user has notification settings
     let settings = await prisma.userSettings.findUnique({
       where: { userId },
@@ -63,6 +73,16 @@ export async function PUT(request: NextRequest) {
     const userId = await getUserId(request)
     const body = await request.json()
     const validatedData = notificationSettingsSchema.parse(body)
+
+    // First check if user exists
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true }
+    })
+
+    if (!user) {
+      return createErrorResponse("User not found", 404)
+    }
 
     const settings = await prisma.userSettings.upsert({
       where: { userId },

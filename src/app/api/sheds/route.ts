@@ -29,11 +29,6 @@ export async function GET(request: NextRequest) {
             location: true,
           },
         },
-        _count: {
-          select: {
-            productions: true,
-          },
-        },
       },
       orderBy: [
         { farm: { name: 'asc' } },
@@ -92,11 +87,6 @@ export async function POST(request: NextRequest) {
             id: true,
             name: true,
             location: true,
-          },
-        },
-        _count: {
-          select: {
-            productions: true,
           },
         },
       },
